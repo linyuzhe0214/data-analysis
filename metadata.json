@@ -1,0 +1,5 @@
+{
+  "name": "Highway Pavement Analysis Platform",
+  "description": "A dashboard for analyzing highway pavement inspection data (IRI and SN), featuring historical trends and linear color-coded distribution maps.",
+  "requestFramePermissions": []
+}
