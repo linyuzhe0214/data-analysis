@@ -5,14 +5,21 @@ import { PavementData } from './types';
 import { generateMockData } from './data/mockData';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
+import { RawDataDashboard } from './components/RawDataDashboard';
+import { RawIriData, RawSnData, parseIRIFile, parseSNFile } from './lib/excelParser';
 
 export default function App() {
   const [data, setData] = useState<PavementData[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | ''>('');
-  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
+  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map' | 'raw-data'>('trends');
+  const [rawIriData, setRawIriData] = useState<RawIriData[]>([]);
+  const [rawSnData, setRawSnData] = useState<RawSnData[]>([]);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const iriFileInputRef = useRef<HTMLInputElement>(null);
+  const snFileInputRef = useRef<HTMLInputElement>(null);
 
   const routes = useMemo(() => {
     const dataRoutes = Array.from(new Set(data.map(d => d.route))) as string[];
@@ -76,6 +83,40 @@ export default function App() {
     });
   };
 
+  const handleRawIriUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      const allData: RawIriData[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const result = await parseIRIFile(files[i]);
+        allData.push(...result);
+      }
+      setRawIriData(prev => [...prev, ...allData]);
+      setActiveTab('raw-data');
+    } catch (err) {
+      console.error(err);
+      alert('IRI 檔案解析失敗，請確認檔案格式');
+    }
+  };
+
+  const handleRawSnUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      const allData: RawSnData[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const result = await parseSNFile(files[i]);
+        allData.push(...result);
+      }
+      setRawSnData(prev => [...prev, ...allData]);
+      setActiveTab('raw-data');
+    } catch (err) {
+      console.error(err);
+      alert('SN 檔案解析失敗，請確認檔案格式');
+    }
+  };
+
   const loadMockData = () => {
     setData(generateMockData());
   };
@@ -130,16 +171,47 @@ export default function App() {
               ref={fileInputRef}
               onChange={handleFileUpload}
             />
+            <input 
+              type="file" 
+              accept=".xlsx,.xls,.csv" 
+              multiple
+              className="hidden" 
+              ref={iriFileInputRef}
+              onChange={handleRawIriUpload}
+            />
+            <input 
+              type="file" 
+              accept=".xlsx,.xls,.csv" 
+              multiple
+              className="hidden" 
+              ref={snFileInputRef}
+              onChange={handleRawSnUpload}
+            />
             <button 
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
-              上傳 CSV
+              上傳歷史 CSV
+            </button>
+            <div className="h-6 w-px bg-slate-300"></div>
+            <button 
+              onClick={() => iriFileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              匯入原始 IRI
+            </button>
+            <button 
+              onClick={() => snFileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              匯入原始 SN
             </button>
             <button 
               onClick={loadMockData}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm ml-2"
             >
               <FileDown className="w-4 h-4" />
               載入範例資料
@@ -239,6 +311,24 @@ export default function App() {
                   IRI 色塊圖 (獨立頁面)
                 </div>
               </button>
+              <button
+                onClick={() => setActiveTab('raw-data')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'raw-data'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  原始報表分析
+                  {(rawIriData.length > 0 || rawSnData.length > 0) && (
+                    <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+                      {rawIriData.length + rawSnData.length} 筆
+                    </span>
+                  )}
+                </div>
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -310,6 +400,10 @@ export default function App() {
                   />
                 ))}
               </div>
+            )}
+
+            {activeTab === 'raw-data' && (
+              <RawDataDashboard iriData={rawIriData} snData={rawSnData} />
             )}
           </div>
         )}
