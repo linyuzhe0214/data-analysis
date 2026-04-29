@@ -90,7 +90,12 @@ export default function App() {
       const allData: RawIriData[] = [];
       for (let i = 0; i < files.length; i++) {
         const result = await parseIRIFile(files[i]);
+        console.log(`Parsed IRI File ${i}:`, result);
         allData.push(...result);
+      }
+      if (allData.length === 0) {
+        alert('檔案讀取成功，但未能辨識出任何有效的 IRI 資料。請確認檔案內容符合預期格式（需有結束里程、平均IRI 等欄位）。');
+        return;
       }
       setRawIriData(prev => [...prev, ...allData]);
       setActiveTab('raw-data');
@@ -107,7 +112,12 @@ export default function App() {
       const allData: RawSnData[] = [];
       for (let i = 0; i < files.length; i++) {
         const result = await parseSNFile(files[i]);
+        console.log(`Parsed SN File ${i}:`, result);
         allData.push(...result);
+      }
+      if (allData.length === 0) {
+        alert('檔案讀取成功，但未能辨識出任何有效的 SN 資料。請確認檔案內容是否有包含「測試里程」等欄位。');
+        return;
       }
       setRawSnData(prev => [...prev, ...allData]);
       setActiveTab('raw-data');

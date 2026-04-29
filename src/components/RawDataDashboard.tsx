@@ -49,7 +49,7 @@ export const RawDataDashboard: React.FC<RawDataDashboardProps> = ({ iriData, snD
       const item = merged.get(key);
       item.iri = d.avgIri;
       item.prqi = d.avgPrqi;
-      item.time = d.time || item.time;
+      item.date = d.date || item.date;
     });
 
     // 加入 SN 資料
@@ -59,7 +59,7 @@ export const RawDataDashboard: React.FC<RawDataDashboardProps> = ({ iriData, snD
       if (!merged.has(key)) merged.set(key, { mileage: key, numericMileage: parseMileageToNumber(key) });
       const item = merged.get(key);
       item.sn = d.sn;
-      item.time = d.time || item.time;
+      item.date = d.date || item.date;
     });
 
     return Array.from(merged.values()).sort((a, b) => a.numericMileage - b.numericMileage);
@@ -153,8 +153,8 @@ export const RawDataDashboard: React.FC<RawDataDashboardProps> = ({ iriData, snD
                 <Tooltip 
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   labelFormatter={(label, payload) => {
-                    const time = payload[0]?.payload?.time;
-                    return time ? `${label} (${time})` : label;
+                    const date = payload[0]?.payload?.date;
+                    return date ? `${label} (${date})` : label;
                   }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
