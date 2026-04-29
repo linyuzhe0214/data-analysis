@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { RawSnData, RawIriData } from './excelParser';
 
 // ← 部署後填入你的 GAS Web App URL
