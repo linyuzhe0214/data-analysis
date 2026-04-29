@@ -231,7 +231,7 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {data.length === 0 ? (
+        {data.length === 0 && rawIriData.length === 0 && rawSnData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
             <Activity className="w-16 h-16 text-slate-300 mb-4" />
             <h2 className="text-xl font-medium text-slate-700 mb-2">尚未載入資料</h2>
@@ -343,8 +343,12 @@ export default function App() {
 
             {/* Tab Content */}
             {activeTab === 'trends' && (
+              data.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
+                  <p className="text-sm">請上傳歷史 CSV 資料以顯示趨勢圖</p>
+                </div>
+              ) : (
               <div className="space-y-6">
-                {/* Stats Cards for trends */}
                 {stats && (
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
@@ -397,11 +401,16 @@ export default function App() {
                 <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} type="iri" />
                 <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} type="sn" />
               </div>
+              )
             )}
 
             {activeTab === 'iri-map' && (
+              data.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
+                  <p className="text-sm">請上傳歷史 CSV 資料以顯示 IRI 色塊圖</p>
+                </div>
+              ) : (
               <div className="space-y-6">
-
                 {availableDirections.map(dir => (
                   <ColorMap 
                     key={dir}
@@ -410,6 +419,7 @@ export default function App() {
                   />
                 ))}
               </div>
+              )
             )}
 
             {activeTab === 'raw-data' && (
