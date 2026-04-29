@@ -7,6 +7,7 @@ import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { RawDataDashboard } from './components/RawDataDashboard';
 import { RawIriData, RawSnData, parseIRIFile, parseSNFile } from './lib/excelParser';
+import { uploadSNData, uploadIRIData } from './lib/gasService';
 
 export default function App() {
   const [data, setData] = useState<PavementData[]>([]);
@@ -99,6 +100,10 @@ export default function App() {
       }
       setRawIriData(prev => [...prev, ...allData]);
       setActiveTab('raw-data');
+      // 背景寫入 GAS 資料庫（不阻塞 UI）
+      if (import.meta.env.VITE_GAS_URL) {
+        uploadIRIData(allData).catch(err => console.warn('[GAS upload IRI failed]', err));
+      }
     } catch (err) {
       console.error(err);
       alert('IRI 檔案解析失敗，請確認檔案格式');
@@ -121,6 +126,10 @@ export default function App() {
       }
       setRawSnData(prev => [...prev, ...allData]);
       setActiveTab('raw-data');
+      // 背景寫入 GAS 資料庫（不阻塞 UI）
+      if (import.meta.env.VITE_GAS_URL) {
+        uploadSNData(allData).catch(err => console.warn('[GAS upload SN failed]', err));
+      }
     } catch (err) {
       console.error(err);
       alert('SN 檔案解析失敗，請確認檔案格式');

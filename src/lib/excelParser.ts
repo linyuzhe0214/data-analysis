@@ -38,8 +38,15 @@ const convertROCDate = (input: string): string => {
   return `${rocYear + 1911}-${month}-${day}`;
 };
 
-/** ISO datetime "2025-05-08T19:38:40.926" → "2025-05-08" */
-const extractDateOnly = (timeStr: string): string => timeStr.split('T')[0];
+/** 統一把各種日期值轉成 "YYYY-MM-DD"（處理 JS Date / ISO string / 純日期字串） */
+const normalizeDateValue = (val: unknown): string => {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().split('T')[0];
+  const s = String(val);
+  if (s.includes('T')) return s.split('T')[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return s;
+};
 
 /** 將 166500 轉換為 166k+500（IRI 里程格式） */
 export const formatMileageIRI = (rawMileage: number | string): string => {
@@ -101,7 +108,9 @@ export const parseSNFile = async (file: File): Promise<RawSnData[]> => {
           const worksheet = workbook.Sheets[sheetName];
           const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-          let globalDate = '';
+          // Sheet 名稱可能就是民國日期 ex: "1140422"
+          const sheetDateConverted = convertROCDate(sheetName.trim());
+          let globalDate = sheetDateConverted !== sheetName.trim() ? sheetDateConverted : '';
           let globalRoute = '';
 
           for (let r = 0; r < rows.length; r++) {
@@ -169,7 +178,8 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
     reader.onload = (e) => {
       try {
         const data     = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        // cellDates:true → Excel 日期欄位轉為 JS Date，而非 serial number
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const results: RawIriData[] = [];
 
         workbook.SheetNames.forEach(sheetName => {
@@ -229,9 +239,9 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
             const avgPrqiVal  = avgPrqiIdx !== -1 ? row[avgPrqiIdx] : 0;
 
             if (!isNaN(Number(mileageVal)) && !isNaN(Number(avgIriVal))) {
-              const rawTime = timeIdx !== -1 && row[timeIdx] ? String(row[timeIdx]) : '';
+              const rawTime = timeIdx !== -1 ? row[timeIdx] : null;
               results.push({
-                date:      extractDateOnly(rawTime),
+                date:      normalizeDateValue(rawTime),
                 mileage:   formatMileageIRI(mileageVal),
                 route,
                 direction,
