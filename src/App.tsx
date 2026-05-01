@@ -8,7 +8,6 @@ import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
 import { uploadSNData, uploadIRIData } from './lib/gasService';
-import { uploadSNData, uploadIRIData } from './lib/gasService';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 
