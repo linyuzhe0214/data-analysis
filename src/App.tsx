@@ -147,6 +147,19 @@ export default function App() {
 
     // 2. 批次分塊上傳階段 (Batch Chunking)
     if (allParsed.length > 0) {
+      
+      const parseMileageToNumber = (raw: any): number => {
+        if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
+        const str = String(raw || '');
+        // 處理 "166k+500" 或 "166+500"
+        const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
+        if (match) {
+          return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
+        }
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
+      };
+
       if (import.meta.env.VITE_GAS_URL) {
         // 先將狀態全部切換為 uploading
         // 先將狀態全部切換為 uploading
@@ -197,7 +210,7 @@ export default function App() {
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
             lane: p.lane || '外側車道',
-            mileage: Number(p.mileage) || 0,
+            mileage: parseMileageToNumber(p.mileage),
             iri: p.avgIri ? Number(p.avgIri) : 0,
             sn: p.sn ? Number(p.sn) : 0
           }));
@@ -213,7 +226,7 @@ export default function App() {
           route: p.route || '未知路線',
           direction: p.direction || '未知方向',
           lane: p.lane || '外側車道',
-          mileage: Number(p.mileage) || 0,
+          mileage: parseMileageToNumber(p.mileage),
           iri: p.avgIri ? Number(p.avgIri) : 0,
           sn: p.sn ? Number(p.sn) : 0
         }));
