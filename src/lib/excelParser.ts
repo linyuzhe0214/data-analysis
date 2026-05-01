@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 export interface RawIriData {
   date: string;      // YYYY-MM-DD
+  time: string;      // HH:MM:SS（或空字串）
   mileage: string;
   route: string;     // 國道X號
   direction: string; // 北上/南下/東向/西向
@@ -21,54 +22,118 @@ export interface RawSnData {
 
 // ─── 工具函式 ────────────────────────────────────────────────
 
-/** 從任意字串抽取「國道X號」 */
+/**
+ * 從任意字串抽取「國道X號」，支援多種寫法：
+ * - 國道1號 / 國道一號
+ * - 省道 / 市道（不在範圍內，僅抓國道）
+ * - freeway 1 / F1（備用）
+ */
+const CHINESE_DIGITS: Record<string, string> = {
+  '一': '1', '二': '2', '三': '3', '四': '4', '五': '5',
+  '六': '6', '七': '7', '八': '8', '九': '9', '十': '10',
+};
+
 const extractHighway = (text: string): string => {
-  const m = text.match(/國道\d+號/);
-  return m ? m[0] : '';
+  if (!text) return '';
+  // 優先：國道數字號
+  let m = text.match(/國道\s*(\d+)\s*號/);
+  if (m) return `國道${m[1]}號`;
+  // 國道中文數字號
+  m = text.match(/國道\s*([一二三四五六七八九十])\s*號/);
+  if (m) return `國道${CHINESE_DIGITS[m[1]] ?? m[1]}號`;
+  // 備用：只有數字（例如 F1、Freeway 1）
+  m = text.match(/[Ff]reeway\s*(\d+)/);
+  if (m) return `國道${m[1]}號`;
+  return '';
 };
 
-/** 民國日期 "1140422..." → "2025-04-22"，或直接傳西元日期字串回傳 */
+/** 民國日期 "1140422" 或 "114/04/22" → "2025-04-22" */
 const convertROCDate = (input: string): string => {
-  const m = input.match(/^(\d{7})/);
-  if (!m) return input;
-  const digits = m[1];
-  const rocYear = parseInt(digits.slice(0, 3), 10);
-  const month   = digits.slice(3, 5);
-  const day     = digits.slice(5, 7);
-  return `${rocYear + 1911}-${month}-${day}`;
+  const s = String(input || '').trim();
+  // 純數字 7 碼
+  let m = s.match(/^(\d{3})(\d{2})(\d{2})/);
+  if (m) return `${parseInt(m[1]) + 1911}-${m[2]}-${m[3]}`;
+  // 斜線分隔：114/04/22 或 114-04-22
+  m = s.match(/^(\d{2,3})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) {
+    const y = parseInt(m[1]);
+    const mo = m[2].padStart(2, '0');
+    const d  = m[3].padStart(2, '0');
+    return `${y + 1911}-${mo}-${d}`;
+  }
+  return '';
 };
 
-/** 統一把各種日期值轉成 "YYYY-MM-DD"（處理 JS Date / ISO string / 純日期字串） */
-const normalizeDateValue = (val: unknown): string => {
-  if (!val) return '';
-  if (val instanceof Date) return val.toISOString().split('T')[0];
-  const s = String(val);
-  if (s.includes('T')) return s.split('T')[0];
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  return s;
+/** 統一把各種日期值轉成 { date: "YYYY-MM-DD", time: "HH:MM:SS" } */
+const normalizeDateTimeValue = (val: unknown): { date: string; time: string } => {
+  if (!val) return { date: '', time: '' };
+
+  // JS Date 物件（cellDates: true 時出現）
+  if (val instanceof Date) {
+    const iso = val.toISOString(); // UTC
+    // Excel 日期通常直接是當地時間，不做 timezone 轉換
+    const [datePart, timePart] = iso.split('T');
+    return {
+      date: datePart,
+      time: timePart?.split('.')[0] ?? '',
+    };
+  }
+
+  const s = String(val).trim();
+
+  // ISO with time：2025-04-22T09:30:00
+  if (s.includes('T')) {
+    const [datePart, timePart] = s.split('T');
+    return { date: datePart, time: timePart?.split('.')[0] ?? '' };
+  }
+
+  // 含空白的日期時間：2025-04-22 09:30:00
+  if (/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+    const [datePart, timePart] = s.split(' ');
+    return { date: datePart, time: timePart ?? '' };
+  }
+
+  // 純西元日期
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return { date: s, time: '' };
+
+  // 民國日期（含時間）：1140422 09:30:00
+  const rocWithTime = s.match(/^(\d{7})\s+(\d{2}:\d{2}(:\d{2})?)/);
+  if (rocWithTime) {
+    return {
+      date: convertROCDate(rocWithTime[1]),
+      time: rocWithTime[2],
+    };
+  }
+
+  // 純民國日期
+  const roc = convertROCDate(s);
+  if (roc) return { date: roc, time: '' };
+
+  return { date: s, time: '' };
 };
 
-/** 將 166500 轉換為 166k+500（IRI 里程格式） */
+/** 166500 → "166k+500"（IRI 里程格式）*/
 export const formatMileageIRI = (rawMileage: number | string): string => {
   const m = Number(rawMileage);
   if (isNaN(m)) return String(rawMileage);
   const km    = Math.floor(m / 1000);
-  const meter = m % 1000;
+  const meter = Math.round(m % 1000);
   return `${km}k+${meter.toString().padStart(3, '0')}`;
 };
 
-/** 將 166+500 轉換為 166k+500（SN 里程格式） */
+/** "166+500" → "166k+500"（SN 里程格式）*/
 export const formatMileageSN = (rawMileage: string): string => {
   if (!rawMileage || typeof rawMileage !== 'string') return String(rawMileage);
-  return rawMileage.replace('+', 'k+');
+  return rawMileage.replace(/\+/, 'k+');
 };
 
 /** 順樁/逆樁 × 國道 → 方向 */
 const resolveDirection = (raw: string, highway: string): string => {
   const isRoute4 = highway.includes('4');
-  if (raw.includes('逆樁')) return isRoute4 ? '西向' : '北上';
-  if (raw.includes('順樁')) return isRoute4 ? '東向' : '南下';
-  return raw; // 直接回傳（已是北上/南下等）
+  if (raw.includes('逆樁') || raw === '北上') return isRoute4 ? '西向' : '北上';
+  if (raw.includes('順樁') || raw === '南下') return isRoute4 ? '東向' : '南下';
+  if (['北上', '南下', '東向', '西向'].includes(raw)) return raw;
+  return raw;
 };
 
 /** 車道代碼 N3/S3 → { direction, lane } */
@@ -84,11 +149,15 @@ const parseLaneCode = (code: string): { direction: string; lane: string } => {
 
 /** 從 IRI sheet 名稱解析 { route, lane, directionRaw } */
 const parseIriSheetName = (sheetName: string) => {
-  const laneMatch = sheetName.match(/第[一二三四五六七八九十百]+車道/);
-  const lane  = laneMatch ? laneMatch[0] : '';
-  const route = extractHighway(sheetName);
+  const laneMatch = sheetName.match(/第[一二三四五六七八九十百\d]+車道/);
+  const lane      = laneMatch ? laneMatch[0] : '';
+  const route     = extractHighway(sheetName);
   const directionRaw = sheetName.includes('逆樁') ? '逆樁'
                      : sheetName.includes('順樁') ? '順樁'
+                     : sheetName.includes('北上') ? '北上'
+                     : sheetName.includes('南下') ? '南下'
+                     : sheetName.includes('東向') ? '東向'
+                     : sheetName.includes('西向') ? '西向'
                      : '';
   return { route, lane, directionRaw };
 };
@@ -110,37 +179,41 @@ export const parseSNFile = async (file: File): Promise<RawSnData[]> => {
 
           // Sheet 名稱可能就是民國日期 ex: "1140422"
           const sheetDateConverted = convertROCDate(sheetName.trim());
-          let globalDate = sheetDateConverted !== sheetName.trim() ? sheetDateConverted : '';
+          let globalDate  = sheetDateConverted || '';
           let globalRoute = '';
+
+          // 先從 sheet name 抽國道別
+          globalRoute = extractHighway(sheetName);
 
           for (let r = 0; r < rows.length; r++) {
             const row = rows[r];
             if (!row) continue;
 
-            // Row 1：公路編號 → 抽取國道別
-            if (r === 0) {
-              const fullText = row.map(String).join(' ');
-              globalRoute = extractHighway(fullText);
+            // Row 0：掃整列，優先抓國道別（如果 sheet name 沒有）
+            if (r === 0 || r === 1) {
+              const fullText = row.map(c => String(c ?? '')).join(' ');
+              if (!globalRoute) globalRoute = extractHighway(fullText);
             }
 
-            // 測試日期 → 轉換民國日期
+            // 掃整列找「測試日期」
             for (let c = 0; c < row.length; c++) {
-              const cell = String(row[c] || '').trim();
+              const cell = String(row[c] ?? '').trim();
               if (cell === '測試日期' && row[c + 1]) {
-                globalDate = convertROCDate(String(row[c + 1]).trim());
-              } else if (cell.includes('測試日期') && cell.length > 4) {
-                const dateStr = cell.replace('測試日期', '').trim();
-                globalDate = convertROCDate(dateStr);
+                const dt = normalizeDateTimeValue(row[c + 1]);
+                if (dt.date) globalDate = dt.date;
+              } else if (cell.startsWith('測試日期') && cell.length > 4) {
+                const dateStr = cell.replace(/^測試日期[：:]*\s*/, '').trim();
+                const dt = normalizeDateTimeValue(dateStr);
+                if (dt.date) globalDate = dt.date;
               }
             }
 
-            // 掃描資料欄：里程 + 車道代碼 + 抗滑值
+            // 掃資料欄：里程 + 車道代碼 + 抗滑值
             for (let c = 0; c < row.length - 2; c++) {
-              const cellA = String(row[c]     || '').trim(); // 里程 192+000
-              const cellB = String(row[c + 1] || '').trim(); // 車道代碼 N3
+              const cellA = String(row[c]     ?? '').trim(); // 里程 192+000
+              const cellB = String(row[c + 1] ?? '').trim(); // 車道代碼 N3
               const cellC = row[c + 2];                       // 抗滑值
 
-              // 里程格式 + 車道代碼（字母+數字）+ 數值
               if (
                 cellA.includes('+') &&
                 /^[NSEWnsew]\d+$/.test(cellB) &&
@@ -178,7 +251,6 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
     reader.onload = (e) => {
       try {
         const data     = new Uint8Array(e.target?.result as ArrayBuffer);
-        // cellDates:true → Excel 日期欄位轉為 JS Date，而非 serial number
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const results: RawIriData[] = [];
 
@@ -186,31 +258,39 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
           const worksheet = workbook.Sheets[sheetName];
           const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-          // 先從 sheet 名稱解析路線/車道/方向（優先）
           const fromSheetName = parseIriSheetName(sheetName);
           let route        = fromSheetName.route;
           let lane         = fromSheetName.lane;
           let directionRaw = fromSheetName.directionRaw;
           let headerRowIndex = -1;
 
-          // 掃描前 20 列，補充 cell 中的 metadata（sheet 名稱沒有才用）
-          for (let r = 0; r < Math.min(20, rows.length); r++) {
+          // 掃前 30 列，補充 metadata
+          for (let r = 0; r < Math.min(30, rows.length); r++) {
             const row = rows[r];
             if (!row) continue;
 
-            const firstCell = String(row[0] || '').trim();
-
-            if (!route && firstCell.startsWith('路名:')) {
-              route = extractHighway(firstCell.replace('路名:', '').trim()) || firstCell.replace('路名:', '').trim();
-            }
-            if (!lane && firstCell.startsWith('車道:')) {
-              lane = firstCell.replace('車道:', '').split(' ')[0].trim();
-            }
-            if (!directionRaw && firstCell.startsWith('方向:')) {
-              directionRaw = firstCell.replace('方向:', '').trim().split(' ')[0].trim();
+            // 掃整列找國道別（sheet name 沒有的話）
+            if (!route) {
+              const fullText = row.map(c => String(c ?? '')).join(' ');
+              route = extractHighway(fullText);
             }
 
-            const rowStr = row.map(c => String(c || '').trim()).join(',');
+            const firstCell = String(row[0] ?? '').trim();
+
+            if (!route && firstCell.startsWith('路名')) {
+              const val = firstCell.replace(/^路名[：:]*\s*/, '').trim() || String(row[1] ?? '').trim();
+              route = extractHighway(val) || val;
+            }
+            if (!lane && firstCell.startsWith('車道')) {
+              const val = firstCell.replace(/^車道[：:]*\s*/, '').trim() || String(row[1] ?? '').trim();
+              lane = val.split(/\s+/)[0];
+            }
+            if (!directionRaw && firstCell.startsWith('方向')) {
+              const val = firstCell.replace(/^方向[：:]*\s*/, '').trim() || String(row[1] ?? '').trim();
+              directionRaw = val.split(/\s+/)[0];
+            }
+
+            const rowStr = row.map(c => String(c ?? '').trim()).join(',');
             if (rowStr.includes('結束里程') && rowStr.includes('平均IRI')) {
               headerRowIndex = r;
               break;
@@ -221,12 +301,11 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
 
           const direction = resolveDirection(directionRaw, route);
 
-          // 找欄位 index
-          const headers     = rows[headerRowIndex].map(h => String(h || '').trim());
-          const timeIdx     = headers.findIndex(h => h === '日期時間');
-          const mileageIdx  = headers.findIndex(h => h === '結束里程');
-          const avgIriIdx   = headers.findIndex(h => h === '平均IRI');
-          const avgPrqiIdx  = headers.findIndex(h => h.includes('PRQI') || h.includes('PRQ'));
+          const headers    = rows[headerRowIndex].map(h => String(h ?? '').trim());
+          const timeIdx    = headers.findIndex(h => h === '日期時間' || h === '時間' || h === '日期');
+          const mileageIdx = headers.findIndex(h => h === '結束里程');
+          const avgIriIdx  = headers.findIndex(h => h === '平均IRI');
+          const avgPrqiIdx = headers.findIndex(h => h.includes('PRQI') || h.includes('PRQ'));
 
           if (mileageIdx === -1 || avgIriIdx === -1) return;
 
@@ -240,8 +319,10 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
 
             if (!isNaN(Number(mileageVal)) && !isNaN(Number(avgIriVal))) {
               const rawTime = timeIdx !== -1 ? row[timeIdx] : null;
+              const { date, time } = normalizeDateTimeValue(rawTime);
               results.push({
-                date:      normalizeDateValue(rawTime),
+                date,
+                time,
                 mileage:   formatMileageIRI(mileageVal),
                 route,
                 direction,

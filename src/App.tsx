@@ -1,23 +1,33 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
-import { Upload, FileDown, Activity, AlertTriangle, CheckCircle, Map, TrendingUp } from 'lucide-react';
+import { Upload, FileDown, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database } from 'lucide-react';
 import { PavementData } from './types';
 import { generateMockData } from './data/mockData';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
-import { RawDataDashboard } from './components/RawDataDashboard';
 import { RawIriData, RawSnData, parseIRIFile, parseSNFile } from './lib/excelParser';
 import { uploadSNData, uploadIRIData } from './lib/gasService';
+
+type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
+
+interface UploadResult {
+  type: 'iri' | 'sn';
+  fileName: string;
+  parsed: number;
+  inserted: number;
+  status: UploadStatus;
+  message?: string;
+}
 
 export default function App() {
   const [data, setData] = useState<PavementData[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | ''>('');
-  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map' | 'raw-data'>('trends');
-  const [rawIriData, setRawIriData] = useState<RawIriData[]>([]);
-  const [rawSnData, setRawSnData] = useState<RawSnData[]>([]);
-  
+  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
+  const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
+  const [uploading, setUploading] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iriFileInputRef = useRef<HTMLInputElement>(null);
   const snFileInputRef = useRef<HTMLInputElement>(null);
@@ -84,56 +94,100 @@ export default function App() {
     });
   };
 
+  /** 通用上傳處理：解析 → 立即寫入資料庫 */
   const handleRawIriUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    try {
-      const allData: RawIriData[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const result = await parseIRIFile(files[i]);
-        console.log(`Parsed IRI File ${i}:`, result);
-        allData.push(...result);
+    event.target.value = ''; // 允許重複選同一個檔案
+    setUploading(true);
+
+    for (let i = 0; i < files.length; i++) {
+      const fileName = files[i].name;
+      const pending: UploadResult = { type: 'iri', fileName, parsed: 0, inserted: 0, status: 'parsing' };
+      setUploadResults(prev => [...prev, pending]);
+
+      try {
+        const parsed = await parseIRIFile(files[i]);
+        console.log(`[IRI] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
+
+        if (parsed.length === 0) {
+          setUploadResults(prev => prev.map(r =>
+            r === pending ? { ...r, status: 'error', message: '未辨識到有效資料（缺結束里程/平均IRI欄位？）' } : r
+          ));
+          continue;
+        }
+
+        setUploadResults(prev => prev.map(r =>
+          r === pending ? { ...r, parsed: parsed.length, status: 'uploading' } : r
+        ));
+
+        if (import.meta.env.VITE_GAS_URL) {
+          const res = await uploadIRIData(parsed);
+          setUploadResults(prev => prev.map(r =>
+            r === pending
+              ? { ...r, inserted: res.inserted ?? parsed.length, status: res.success ? 'done' : 'error', message: res.error }
+              : r
+          ));
+        } else {
+          // 沒設 GAS URL → 只顯示解析結果
+          setUploadResults(prev => prev.map(r =>
+            r === pending ? { ...r, inserted: parsed.length, status: 'done', message: '（未設定 GAS URL，僅本地解析）' } : r
+          ));
+        }
+      } catch (err: any) {
+        setUploadResults(prev => prev.map(r =>
+          r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r
+        ));
       }
-      if (allData.length === 0) {
-        alert('檔案讀取成功，但未能辨識出任何有效的 IRI 資料。請確認檔案內容符合預期格式（需有結束里程、平均IRI 等欄位）。');
-        return;
-      }
-      setRawIriData(prev => [...prev, ...allData]);
-      setActiveTab('raw-data');
-      // 背景寫入 GAS 資料庫（不阻塞 UI）
-      if (import.meta.env.VITE_GAS_URL) {
-        uploadIRIData(allData).catch(err => console.warn('[GAS upload IRI failed]', err));
-      }
-    } catch (err) {
-      console.error(err);
-      alert('IRI 檔案解析失敗，請確認檔案格式');
     }
+    setUploading(false);
   };
 
   const handleRawSnUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    try {
-      const allData: RawSnData[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const result = await parseSNFile(files[i]);
-        console.log(`Parsed SN File ${i}:`, result);
-        allData.push(...result);
+    event.target.value = '';
+    setUploading(true);
+
+    for (let i = 0; i < files.length; i++) {
+      const fileName = files[i].name;
+      const pending: UploadResult = { type: 'sn', fileName, parsed: 0, inserted: 0, status: 'parsing' };
+      setUploadResults(prev => [...prev, pending]);
+
+      try {
+        const parsed = await parseSNFile(files[i]);
+        console.log(`[SN] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
+
+        if (parsed.length === 0) {
+          setUploadResults(prev => prev.map(r =>
+            r === pending ? { ...r, status: 'error', message: '未辨識到有效資料（缺里程/車道代碼/抗滑值？）' } : r
+          ));
+          continue;
+        }
+
+        setUploadResults(prev => prev.map(r =>
+          r === pending ? { ...r, parsed: parsed.length, status: 'uploading' } : r
+        ));
+
+        if (import.meta.env.VITE_GAS_URL) {
+          const res = await uploadSNData(parsed);
+          setUploadResults(prev => prev.map(r =>
+            r === pending
+              ? { ...r, inserted: res.inserted ?? parsed.length, status: res.success ? 'done' : 'error', message: res.error }
+              : r
+          ));
+        } else {
+          setUploadResults(prev => prev.map(r =>
+            r === pending ? { ...r, inserted: parsed.length, status: 'done', message: '（未設定 GAS URL，僅本地解析）' } : r
+          ));
+        }
+      } catch (err: any) {
+        setUploadResults(prev => prev.map(r =>
+          r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r
+        ));
       }
-      if (allData.length === 0) {
-        alert('檔案讀取成功，但未能辨識出任何有效的 SN 資料。請確認檔案內容是否有包含「測試里程」等欄位。');
-        return;
-      }
-      setRawSnData(prev => [...prev, ...allData]);
-      setActiveTab('raw-data');
-      // 背景寫入 GAS 資料庫（不阻塞 UI）
-      if (import.meta.env.VITE_GAS_URL) {
-        uploadSNData(allData).catch(err => console.warn('[GAS upload SN failed]', err));
-      }
-    } catch (err) {
-      console.error(err);
-      alert('SN 檔案解析失敗，請確認檔案格式');
     }
+    setUploading(false);
   };
 
   const loadMockData = () => {
@@ -214,6 +268,12 @@ export default function App() {
               上傳歷史 CSV
             </button>
             <div className="h-6 w-px bg-slate-300"></div>
+            {uploading && (
+              <span className="flex items-center gap-1 text-sm text-blue-600 font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                處理中...
+              </span>
+            )}
             <button 
               onClick={() => iriFileInputRef.current?.click()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
@@ -240,17 +300,23 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {data.length === 0 && rawIriData.length === 0 && rawSnData.length === 0 ? (
+        {data.length === 0 && uploadResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
             <Activity className="w-16 h-16 text-slate-300 mb-4" />
             <h2 className="text-xl font-medium text-slate-700 mb-2">尚未載入資料</h2>
             <p className="mb-6">請上傳包含檢測資料的 CSV 檔案，或載入範例資料開始分析。</p>
             <div className="flex gap-4">
               <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-2.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                onClick={() => iriFileInputRef.current?.click()}
+                className="px-6 py-2.5 bg-blue-50 border border-blue-200 rounded-lg font-medium text-blue-700 hover:bg-blue-100 transition-colors"
               >
-                上傳 CSV
+                匯入 IRI 報表
+              </button>
+              <button 
+                onClick={() => snFileInputRef.current?.click()}
+                className="px-6 py-2.5 bg-orange-50 border border-orange-200 rounded-lg font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+              >
+                匯入 SN 報表
               </button>
               <button 
                 onClick={loadMockData}
@@ -302,6 +368,62 @@ export default function App() {
               )}
             </div>
 
+            {/* 上傳結果列表 */}
+            {uploadResults.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <Database className="w-4 h-4 text-blue-500" />
+                    上傳紀錄
+                  </span>
+                  <button
+                    onClick={() => setUploadResults([])}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    清除
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-50">
+                  {uploadResults.map((r, idx) => (
+                    <div key={idx} className="flex items-center gap-3 px-4 py-3">
+                      {/* 類型標籤 */}
+                      <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${
+                        r.type === 'iri' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {r.type.toUpperCase()}
+                      </span>
+                      {/* 檔名 */}
+                      <span className="flex-1 text-sm text-slate-700 truncate" title={r.fileName}>{r.fileName}</span>
+                      {/* 狀態 */}
+                      {r.status === 'parsing' && (
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <Loader2 className="w-3 h-3 animate-spin" />解析中
+                        </span>
+                      )}
+                      {r.status === 'uploading' && (
+                        <span className="flex items-center gap-1 text-xs text-blue-500">
+                          <Loader2 className="w-3 h-3 animate-spin" />寫入資料庫 ({r.parsed} 筆)
+                        </span>
+                      )}
+                      {r.status === 'done' && (
+                        <span className="flex items-center gap-1 text-xs text-green-600">
+                          <CheckCircle className="w-3 h-3" />
+                          已匯入 {r.inserted} 筆
+                          {r.message && <span className="text-slate-400"> {r.message}</span>}
+                        </span>
+                      )}
+                      {r.status === 'error' && (
+                        <span className="flex items-center gap-1 text-xs text-red-500" title={r.message}>
+                          <AlertTriangle className="w-3 h-3" />
+                          失敗：{r.message?.slice(0, 60)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Tabs Navigation */}
             <div className="flex border-b border-slate-200">
               <button
@@ -327,25 +449,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-2">
                   <Map className="w-4 h-4" />
-                  IRI 色塊圖 (獨立頁面)
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('raw-data')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'raw-data'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  原始報表分析
-                  {(rawIriData.length > 0 || rawSnData.length > 0) && (
-                    <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
-                      {rawIriData.length + rawSnData.length} 筆
-                    </span>
-                  )}
+                  IRI 色塊圖
                 </div>
               </button>
             </div>
@@ -431,9 +535,7 @@ export default function App() {
               )
             )}
 
-            {activeTab === 'raw-data' && (
-              <RawDataDashboard iriData={rawIriData} snData={rawSnData} />
-            )}
+
           </div>
         )}
       </main>

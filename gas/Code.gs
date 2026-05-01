@@ -3,7 +3,7 @@
 //  Sheet: "SN_Data" | "IRI_Data"
 //
 //  SN  Schema : date | route | direction | lane | mileage | sn
-//  IRI Schema : date | route | direction | lane | mileage | avgIri | avgPrqi
+//  IRI Schema : date | time | route | direction | lane | mileage | avgIri | avgPrqi
 // ═══════════════════════════════════════════════════════════
 
 // SS_ID 存在 GAS Script Properties，不寫死在程式碼裡
@@ -14,7 +14,7 @@ const SN_SHEET  = 'SN_Data';
 const IRI_SHEET = 'IRI_Data';
 
 const SN_HEADERS  = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
-const IRI_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
+const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
 
 // ─── CORS + Entry Point ──────────────────────────────────
 
