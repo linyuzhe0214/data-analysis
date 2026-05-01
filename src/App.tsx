@@ -145,7 +145,16 @@ export default function App() {
       if (dryRun) {
         // 試跑模式：不寫入資料庫，直接更新 UI 與本地資料
         setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '🧪 試跑完成 (未寫入)' } : r));
-        setData(prev => [...prev, ...allParsed]);
+        const mappedToPavementData = allParsed.map(p => ({
+          year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+          route: p.route || '未知路線',
+          direction: p.direction || '未知方向',
+          lane: p.lane || '外側車道',
+          mileage: Number(p.mileage) || 0,
+          iri: p.avgIri ? Number(p.avgIri) : 0,
+          sn: p.sn ? Number(p.sn) : 0
+        }));
+        setData(prev => [...prev, ...mappedToPavementData]);
       } else if (import.meta.env.VITE_GAS_URL) {
         // 先將狀態全部切換為 uploading
         setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'uploading', message: '正在準備寫入...' } : r));
@@ -190,13 +199,32 @@ export default function App() {
 
         // 成功寫入資料庫後，直接將新資料加入本地狀態，讓儀表板馬上更新！
         if (totalInserted > 0) {
-          setData(prev => [...prev, ...allParsed]);
+          const mappedToPavementData = allParsed.map(p => ({
+            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+            route: p.route || '未知路線',
+            direction: p.direction || '未知方向',
+            lane: p.lane || '外側車道',
+            mileage: Number(p.mileage) || 0,
+            iri: p.avgIri ? Number(p.avgIri) : 0,
+            sn: p.sn ? Number(p.sn) : 0
+          }));
+          setData(prev => [...prev, ...mappedToPavementData]);
         }
 
       } else {
         // 沒有 GAS URL 的本地測試狀況
         setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '未設定 GAS，僅本地解析' } : r));
-        setData(prev => [...prev, ...allParsed]);
+        
+        const mappedToPavementData = allParsed.map(p => ({
+          year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+          route: p.route || '未知路線',
+          direction: p.direction || '未知方向',
+          lane: p.lane || '外側車道',
+          mileage: Number(p.mileage) || 0,
+          iri: p.avgIri ? Number(p.avgIri) : 0,
+          sn: p.sn ? Number(p.sn) : 0
+        }));
+        setData(prev => [...prev, ...mappedToPavementData]);
       }
     }
 
