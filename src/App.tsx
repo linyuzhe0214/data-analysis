@@ -5,7 +5,9 @@ import { PavementData } from './types';
 import { generateMockData } from './data/mockData';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
-import { RawIriData, RawSnData, parseIRIFile, parseSNFile } from './lib/excelParser';
+import { ImportWizard } from './components/ImportWizard';
+import { MappingRule, parseWithMapping } from './lib/excelParser';
+import { uploadSNData, uploadIRIData } from './lib/gasService';
 import { uploadSNData, uploadIRIData } from './lib/gasService';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
@@ -27,6 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iriFileInputRef = useRef<HTMLInputElement>(null);
@@ -94,73 +97,42 @@ export default function App() {
     });
   };
 
-  /** 通用上傳處理：解析 → 立即寫入資料庫 */
-  const handleRawIriUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  /** 通用上傳處理：擷取檔案後開啟精靈 */
+  const handleRawIriUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0) return;
-    event.target.value = ''; // 允許重複選同一個檔案
-    setUploading(true);
-
-    for (let i = 0; i < files.length; i++) {
-      const fileName = files[i].name;
-      const pending: UploadResult = { type: 'iri', fileName, parsed: 0, inserted: 0, status: 'parsing' };
-      setUploadResults(prev => [...prev, pending]);
-
-      try {
-        const parsed = await parseIRIFile(files[i]);
-        console.log(`[IRI] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
-
-        if (parsed.length === 0) {
-          setUploadResults(prev => prev.map(r =>
-            r === pending ? { ...r, status: 'error', message: '未辨識到有效資料（缺結束里程/平均IRI欄位？）' } : r
-          ));
-          continue;
-        }
-
-        setUploadResults(prev => prev.map(r =>
-          r === pending ? { ...r, parsed: parsed.length, status: 'uploading' } : r
-        ));
-
-        if (import.meta.env.VITE_GAS_URL) {
-          const res = await uploadIRIData(parsed);
-          setUploadResults(prev => prev.map(r =>
-            r === pending
-              ? { ...r, inserted: res.inserted ?? parsed.length, status: res.success ? 'done' : 'error', message: res.error }
-              : r
-          ));
-        } else {
-          // 沒設 GAS URL → 只顯示解析結果
-          setUploadResults(prev => prev.map(r =>
-            r === pending ? { ...r, inserted: parsed.length, status: 'done', message: '（未設定 GAS URL，僅本地解析）' } : r
-          ));
-        }
-      } catch (err: any) {
-        setUploadResults(prev => prev.map(r =>
-          r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r
-        ));
-      }
+    if (files && files.length > 0) {
+      setWizardState({ files: Array.from(files), type: 'iri' });
     }
-    setUploading(false);
+    event.target.value = ''; // 允許重複選同一個檔案
   };
 
-  const handleRawSnUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRawSnUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (files && files.length > 0) {
+      setWizardState({ files: Array.from(files), type: 'sn' });
+    }
     event.target.value = '';
+  };
+
+  const handleWizardConfirm = async (rule: MappingRule) => {
+    if (!wizardState) return;
+    const { files, type } = wizardState;
+    setWizardState(null);
     setUploading(true);
 
     for (let i = 0; i < files.length; i++) {
-      const fileName = files[i].name;
-      const pending: UploadResult = { type: 'sn', fileName, parsed: 0, inserted: 0, status: 'parsing' };
+      const file = files[i];
+      const fileName = file.name;
+      const pending: UploadResult = { type, fileName, parsed: 0, inserted: 0, status: 'parsing' };
       setUploadResults(prev => [...prev, pending]);
 
       try {
-        const parsed = await parseSNFile(files[i]);
-        console.log(`[SN] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
+        const parsed = await parseWithMapping([file], rule, type);
+        console.log(`[${type.toUpperCase()}] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
 
         if (parsed.length === 0) {
           setUploadResults(prev => prev.map(r =>
-            r === pending ? { ...r, status: 'error', message: '未辨識到有效資料（缺里程/車道代碼/抗滑值？）' } : r
+            r === pending ? { ...r, status: 'error', message: '依對應規則未能抓取到有效資料' } : r
           ));
           continue;
         }
@@ -170,7 +142,7 @@ export default function App() {
         ));
 
         if (import.meta.env.VITE_GAS_URL) {
-          const res = await uploadSNData(parsed);
+          const res = type === 'iri' ? await uploadIRIData(parsed) : await uploadSNData(parsed);
           setUploadResults(prev => prev.map(r =>
             r === pending
               ? { ...r, inserted: res.inserted ?? parsed.length, status: res.success ? 'done' : 'error', message: res.error }
@@ -230,6 +202,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      {wizardState && (
+        <ImportWizard 
+          files={wizardState.files} 
+          type={wizardState.type} 
+          onConfirm={handleWizardConfirm} 
+          onCancel={() => setWizardState(null)} 
+        />
+      )}
+      
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">

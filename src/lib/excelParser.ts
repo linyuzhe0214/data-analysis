@@ -343,3 +343,155 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
     reader.readAsArrayBuffer(file);
   });
 };
+
+// ─── 精靈專用 Parser ──────────────────────────────────────────────
+
+export interface MappingRule {
+  headerRowIndex: number;
+  columns: {
+    mileage?: number;
+    iri?: number;
+    prqi?: number;
+    sn?: number;
+    date?: number;
+    time?: number;
+    route?: number;
+    direction?: number;
+    lane?: number;
+  };
+  globals: {
+    date?: string;
+    route?: string;
+    direction?: string;
+    lane?: string;
+  };
+}
+
+export const readExcelPreview = async (file: File): Promise<{ sheetName: string; data: string[][] }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+        
+        const previewData = rows.slice(0, 30).map(row => row.map(cell => {
+          if (cell instanceof Date) {
+            // 只取日期部分供預覽
+            return cell.toISOString().split('T')[0];
+          }
+          return String(cell ?? '').trim();
+        }));
+        
+        resolve({ sheetName, data: previewData });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+export const parseWithMapping = async (files: FileList | File[], rule: MappingRule, type: 'iri' | 'sn'): Promise<any[]> => {
+  const results: any[] = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileData = await new Promise<any[]>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          const fileResults: any[] = [];
+
+          workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+            
+            // 如果全域變數設定為 '__SHEET_NAME__'，則自動從 Sheet 名稱解析
+            const fallbackFromSheet = parseIriSheetName(sheetName); 
+            
+            let sheetGlobalRoute = rule.globals.route;
+            if (sheetGlobalRoute === '__SHEET_NAME__') sheetGlobalRoute = fallbackFromSheet.route;
+            
+            let sheetGlobalDirection = rule.globals.direction;
+            if (sheetGlobalDirection === '__SHEET_NAME__') sheetGlobalDirection = resolveDirection(fallbackFromSheet.directionRaw, sheetGlobalRoute || '');
+            
+            let sheetGlobalLane = rule.globals.lane;
+            if (sheetGlobalLane === '__SHEET_NAME__') sheetGlobalLane = fallbackFromSheet.lane;
+
+            for (let r = rule.headerRowIndex + 1; r < rows.length; r++) {
+              const row = rows[r];
+              if (!row || row.length === 0) continue;
+
+              const getCellRaw = (colIdx?: number) => colIdx !== undefined && colIdx >= 0 ? row[colIdx] : '';
+              const getCellStr = (colIdx?: number) => String(getCellRaw(colIdx) ?? '').trim();
+              
+              const mileageRaw = getCellStr(rule.columns.mileage);
+              if (!mileageRaw) continue; // 里程是必備欄位
+
+              // 處理日期與時間
+              const rawDate = getCellRaw(rule.columns.date);
+              const dt = normalizeDateTimeValue(rawDate);
+              const dateVal = rule.globals.date || dt.date;
+              
+              // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
+              const timeColVal = getCellStr(rule.columns.time);
+              let timeVal = timeColVal;
+              if (!timeVal) {
+                  timeVal = dt.time;
+              }
+
+              // 其他維度資訊
+              const routeVal = getCellStr(rule.columns.route) || sheetGlobalRoute || '';
+              const dirRaw = getCellStr(rule.columns.direction) || sheetGlobalDirection || '';
+              const directionVal = resolveDirection(dirRaw, routeVal);
+              const laneVal = getCellStr(rule.columns.lane) || sheetGlobalLane || '';
+
+              if (type === 'iri') {
+                const iriRaw = getCellStr(rule.columns.iri);
+                const prqiRaw = getCellStr(rule.columns.prqi);
+                if (iriRaw && !isNaN(Number(iriRaw))) {
+                  fileResults.push({
+                    date: dateVal,
+                    time: timeVal,
+                    mileage: formatMileageIRI(mileageRaw),
+                    route: routeVal,
+                    direction: directionVal,
+                    lane: laneVal,
+                    avgIri: Number(iriRaw),
+                    avgPrqi: Number(prqiRaw) || 0
+                  });
+                }
+              } else if (type === 'sn') {
+                const snRaw = getCellStr(rule.columns.sn);
+                if (snRaw && !isNaN(Number(snRaw))) {
+                  fileResults.push({
+                    date: dateVal,
+                    mileage: formatMileageSN(mileageRaw),
+                    route: routeVal,
+                    direction: directionVal,
+                    lane: laneVal,
+                    sn: Number(snRaw)
+                  });
+                }
+              }
+            }
+          });
+          resolve(fileResults);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+    results.push(...fileData);
+  }
+  return results;
+};
