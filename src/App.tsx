@@ -113,51 +113,93 @@ export default function App() {
     event.target.value = '';
   };
 
-  const handleWizardConfirm = async (rule: MappingRule) => {
+  const handleWizardConfirm = async (rule: MappingRule, dryRun: boolean) => {
     if (!wizardState) return;
     const { files, type } = wizardState;
     setWizardState(null);
     setUploading(true);
 
+    let allParsed: any[] = [];
+    
+    // 1. 本地高速解析階段
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const fileName = file.name;
-      const pending: UploadResult = { type, fileName, parsed: 0, inserted: 0, status: 'parsing' };
+      const pending: UploadResult = { type, fileName: file.name, parsed: 0, inserted: 0, status: 'parsing' };
       setUploadResults(prev => [...prev, pending]);
 
       try {
         const parsed = await parseWithMapping([file], rule, type);
-        console.log(`[${type.toUpperCase()}] ${fileName} → ${parsed.length} 筆`, parsed.slice(0, 3));
-
         if (parsed.length === 0) {
-          setUploadResults(prev => prev.map(r =>
-            r === pending ? { ...r, status: 'error', message: '依對應規則未能抓取到有效資料' } : r
-          ));
-          continue;
-        }
-
-        setUploadResults(prev => prev.map(r =>
-          r === pending ? { ...r, parsed: parsed.length, status: 'uploading' } : r
-        ));
-
-        if (import.meta.env.VITE_GAS_URL) {
-          const res = type === 'iri' ? await uploadIRIData(parsed) : await uploadSNData(parsed);
-          setUploadResults(prev => prev.map(r =>
-            r === pending
-              ? { ...r, inserted: res.inserted ?? parsed.length, status: res.success ? 'done' : 'error', message: res.error }
-              : r
-          ));
+          setUploadResults(prev => prev.map(r => r === pending ? { ...r, status: 'error', message: '未抓取到有效資料' } : r));
         } else {
-          setUploadResults(prev => prev.map(r =>
-            r === pending ? { ...r, inserted: parsed.length, status: 'done', message: '（未設定 GAS URL，僅本地解析）' } : r
-          ));
+          allParsed = allParsed.concat(parsed);
+          setUploadResults(prev => prev.map(r => r === pending ? { ...r, parsed: parsed.length, status: 'idle', message: dryRun ? '解析完成 (試跑模式)' : '解析完成，等待合併寫入' } : r));
         }
       } catch (err: any) {
-        setUploadResults(prev => prev.map(r =>
-          r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r
-        ));
+        setUploadResults(prev => prev.map(r => r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r));
       }
     }
+
+    // 2. 批次分塊上傳階段 (Batch Chunking)
+    if (allParsed.length > 0) {
+      if (dryRun) {
+        // 試跑模式：不寫入資料庫，直接更新 UI 與本地資料
+        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '🧪 試跑完成 (未寫入)' } : r));
+        setData(prev => [...prev, ...allParsed]);
+      } else if (import.meta.env.VITE_GAS_URL) {
+        // 先將狀態全部切換為 uploading
+        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'uploading', message: '正在準備寫入...' } : r));
+
+        const CHUNK_SIZE = 1000; // 每 1000 筆更新一次進度，避免畫面停頓感
+        let totalInserted = 0;
+        let hasError = false;
+
+        for (let i = 0; i < allParsed.length; i += CHUNK_SIZE) {
+          const chunk = allParsed.slice(i, i + CHUNK_SIZE);
+          
+          // 動態更新進度
+          setUploadResults(prev => prev.map(r => 
+            (r.type === type && r.status === 'uploading') 
+              ? { ...r, message: `正在寫入... (${Math.min(i + CHUNK_SIZE, allParsed.length)} / ${allParsed.length} 筆)` } 
+              : r
+          ));
+
+          try {
+            const res = type === 'iri' ? await uploadIRIData(chunk) : await uploadSNData(chunk);
+            if (res.success) {
+              totalInserted += (res.inserted ?? chunk.length);
+            } else {
+              hasError = true;
+            }
+          } catch (err) {
+            hasError = true;
+          }
+        }
+
+        // 結算狀態並即時更新儀表板資料
+        setUploadResults(prev => prev.map(r => 
+          (r.type === type && r.status === 'uploading') 
+            ? { 
+                ...r, 
+                status: (hasError && totalInserted === 0) ? 'error' : 'done', 
+                inserted: r.parsed, 
+                message: hasError ? `部分上傳失敗 (本次總計寫入 ${totalInserted} 筆)` : '' 
+              } 
+            : r
+        ));
+
+        // 成功寫入資料庫後，直接將新資料加入本地狀態，讓儀表板馬上更新！
+        if (totalInserted > 0) {
+          setData(prev => [...prev, ...allParsed]);
+        }
+
+      } else {
+        // 沒有 GAS URL 的本地測試狀況
+        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '未設定 GAS，僅本地解析' } : r));
+        setData(prev => [...prev, ...allParsed]);
+      }
+    }
+
     setUploading(false);
   };
 

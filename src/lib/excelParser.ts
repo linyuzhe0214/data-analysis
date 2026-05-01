@@ -149,7 +149,7 @@ const parseLaneCode = (code: string): { direction: string; lane: string } => {
 
 /** 從 IRI sheet 名稱解析 { route, lane, directionRaw } */
 const parseIriSheetName = (sheetName: string) => {
-  const laneMatch = sheetName.match(/第[一二三四五六七八九十百\d]+車道/);
+  const laneMatch = sheetName.match(/(內側|中線|外側|第[一二三四五六七八九十百\d]+)車道/);
   const lane      = laneMatch ? laneMatch[0] : '';
   const route     = extractHighway(sheetName);
   const directionRaw = sheetName.includes('逆樁') ? '逆樁'

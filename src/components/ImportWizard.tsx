@@ -5,7 +5,7 @@ import { Loader2, ArrowRight, Table as TableIcon, CheckCircle, AlertTriangle } f
 interface ImportWizardProps {
   files: FileList | File[];
   type: 'iri' | 'sn';
-  onConfirm: (rule: MappingRule) => void;
+  onConfirm: (rule: MappingRule, dryRun: boolean) => void;
   onCancel: () => void;
 }
 
@@ -14,6 +14,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
   const [error, setError] = useState<string>('');
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [sheetName, setSheetName] = useState('');
+  const [dryRun, setDryRun] = useState(false);
   
   const [headerRowIndex, setHeaderRowIndex] = useState<number>(-1);
   const [rule, setRule] = useState<MappingRule>({
@@ -274,16 +275,22 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-          <button 
-            onClick={onCancel}
-            className="px-6 py-2.5 text-slate-600 hover:text-slate-800 font-medium hover:bg-slate-200 rounded-lg transition-colors"
-          >
-            取消匯入
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={onCancel}
+              className="px-6 py-2.5 text-slate-600 hover:text-slate-800 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+            >
+              取消匯入
+            </button>
+            <label className="flex items-center gap-2 text-sm font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors">
+              <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4" />
+              🧪 僅試跑解析，不寫入資料庫
+            </label>
+          </div>
           
           <button 
             disabled={requiredFieldsMissing}
-            onClick={() => onConfirm(rule)}
+            onClick={() => onConfirm(rule, dryRun)}
             className={`
               flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm
               ${requiredFieldsMissing 
