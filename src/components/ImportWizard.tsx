@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MappingRule, readExcelPreview } from '../lib/excelParser';
-import { Loader2, ArrowRight, Table as TableIcon, CheckCircle, AlertTriangle } from 'lucide-react';
+import { MappingRule, readExcelPreview, parseWithMapping } from '../lib/excelParser';
+import { Loader2, ArrowRight, Table as TableIcon, CheckCircle, AlertTriangle, Eye } from 'lucide-react';
 
 interface ImportWizardProps {
   files: FileList | File[];
   type: 'iri' | 'sn';
-  onConfirm: (rule: MappingRule, dryRun: boolean) => void;
+  onConfirm: (rule: MappingRule) => void;
   onCancel: () => void;
 }
 
@@ -14,7 +14,8 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
   const [error, setError] = useState<string>('');
   const [previewData, setPreviewData] = useState<string[][]>([]);
   const [sheetName, setSheetName] = useState('');
-  const [dryRun, setDryRun] = useState(false);
+  const [parsedPreview, setParsedPreview] = useState<any[] | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   
   const [headerRowIndex, setHeaderRowIndex] = useState<number>(-1);
   const [rule, setRule] = useState<MappingRule>({
@@ -97,6 +98,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
     }
 
     setRule(newRule);
+    setParsedPreview(null);
   };
 
   const handleColumnChange = (field: keyof MappingRule['columns'], colIdxStr: string) => {
@@ -105,6 +107,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
       ...prev,
       columns: { ...prev.columns, [field]: colIdx }
     }));
+    setParsedPreview(null);
   };
 
   const handleGlobalChange = (field: keyof MappingRule['globals'], val: string) => {
@@ -112,6 +115,20 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
       ...prev,
       globals: { ...prev.globals, [field]: val }
     }));
+    setParsedPreview(null);
+  };
+
+  const handleGeneratePreview = async () => {
+    setPreviewLoading(true);
+    try {
+      // 僅拿第一個檔案來試跑預覽
+      const parsed = await parseWithMapping([files[0]], rule, type);
+      setParsedPreview(parsed.slice(0, 5)); // 只取前 5 筆
+    } catch (err: any) {
+      alert('解析失敗: ' + (err.message || err));
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const headerRow = headerRowIndex >= 0 ? previewData[headerRowIndex] : [];
@@ -206,101 +223,159 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
             </div>
           </div>
 
-          {/* 右側：資料預覽區 */}
-          <div className="w-full md:w-2/3 p-6 bg-white flex flex-col">
-            <h3 className="text-base font-bold text-slate-800 mb-2 flex items-center justify-between">
-              <span>資料預覽 ({files[0].name})</span>
-              {sheetName && <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">工作表: {sheetName}</span>}
-            </h3>
-            <p className="text-sm text-slate-500 mb-4">請點擊標題列以指定表頭，系統將依此辨識資料結構。</p>
+          {/* 右側：資料預覽區與解析驗證 */}
+          <div className="w-full md:w-2/3 p-6 bg-white flex flex-col gap-6">
             
-            <div className="flex-1 border border-slate-200 rounded-xl overflow-auto bg-slate-50">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin" />
-                  讀取預覽中...
-                </div>
-              ) : error ? (
-                <div className="flex flex-col items-center justify-center h-full text-red-500 gap-3 p-6 text-center">
-                  <AlertTriangle className="w-8 h-8" />
-                  無法讀取檔案，請確認格式正確 ({error})
-                </div>
-              ) : (
-                <table className="w-full text-sm text-left whitespace-nowrap">
-                  <tbody>
-                    {previewData.map((row, rIdx) => {
-                      const isHeader = headerRowIndex === rIdx;
-                      return (
-                        <tr 
-                          key={rIdx} 
-                          className={`
-                            border-b border-slate-200 transition-colors
-                            ${isHeader ? 'bg-blue-100' : 'hover:bg-slate-100 bg-white'}
-                          `}
-                        >
-                          <td className="p-2 border-r border-slate-200 w-16 text-center">
-                            {isHeader ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700">
-                                <CheckCircle className="w-3 h-3" /> 表頭
-                              </span>
-                            ) : (
-                              <button 
-                                onClick={() => handleSelectHeaderRow(rIdx, row)}
-                                className="text-xs font-medium text-slate-500 hover:text-blue-600 px-2 py-1 bg-slate-100 hover:bg-blue-50 rounded"
-                              >
-                                設為表頭
-                              </button>
-                            )}
-                          </td>
-                          <td className="p-2 border-r border-slate-200 font-mono text-xs text-slate-400 w-8 text-center bg-slate-50">
-                            {rIdx + 1}
-                          </td>
-                          {row.map((cell, cIdx) => (
-                            <td 
-                              key={cIdx} 
-                              className={`p-2 border-r border-slate-200 truncate max-w-xs ${isHeader ? 'font-bold text-slate-800' : 'text-slate-600'}`}
-                            >
-                              {cell}
+            {/* 區塊 1: 原始 Excel 預覽 */}
+            <div className="flex-1 flex flex-col min-h-[300px]">
+              <h3 className="text-base font-bold text-slate-800 mb-2 flex items-center justify-between">
+                <span>原始檔案預覽 ({files[0].name})</span>
+                {sheetName && <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">工作表: {sheetName}</span>}
+              </h3>
+              <p className="text-sm text-slate-500 mb-4">請點擊標題列以指定表頭，系統將依此辨識資料結構。</p>
+              
+              <div className="flex-1 border border-slate-200 rounded-xl overflow-auto bg-slate-50">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    讀取預覽中...
+                  </div>
+                ) : error ? (
+                  <div className="flex flex-col items-center justify-center h-full text-red-500 gap-3 p-6 text-center">
+                    <AlertTriangle className="w-8 h-8" />
+                    無法讀取檔案，請確認格式正確 ({error})
+                  </div>
+                ) : (
+                  <table className="w-full text-sm text-left whitespace-nowrap">
+                    <tbody>
+                      {previewData.map((row, rIdx) => {
+                        const isHeader = headerRowIndex === rIdx;
+                        return (
+                          <tr 
+                            key={rIdx} 
+                            className={`
+                              border-b border-slate-200 transition-colors
+                              ${isHeader ? 'bg-blue-100' : 'hover:bg-slate-100 bg-white'}
+                            `}
+                          >
+                            <td className="p-2 border-r border-slate-200 w-16 text-center">
+                              {isHeader ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700">
+                                  <CheckCircle className="w-3 h-3" /> 表頭
+                                </span>
+                              ) : (
+                                <button 
+                                  onClick={() => handleSelectHeaderRow(rIdx, row)}
+                                  className="text-xs font-medium text-slate-500 hover:text-blue-600 px-2 py-1 bg-slate-100 hover:bg-blue-50 rounded"
+                                >
+                                  設為表頭
+                                </button>
+                              )}
                             </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                            <td className="p-2 border-r border-slate-200 font-mono text-xs text-slate-400 w-8 text-center bg-slate-50">
+                              {rIdx + 1}
+                            </td>
+                            {row.map((cell, cIdx) => (
+                              <td 
+                                key={cIdx} 
+                                className={`p-2 border-r border-slate-200 truncate max-w-xs ${isHeader ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
+
+            {/* 區塊 2: 轉換後 JSON 驗證 */}
+            {parsedPreview && (
+              <div className="h-96 flex flex-col border-t border-slate-200 pt-6">
+                <h3 className="text-base font-bold text-green-700 mb-2 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5" /> 準備寫入 GOOGLE 的資料驗證 (前 5 筆)
+                </h3>
+                <p className="text-sm text-slate-500 mb-4">您可以透過下方表格或原始 JSON 陣列，確認資料結構與欄位名稱是否正確。</p>
+                
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+                  {/* 表格視圖 */}
+                  <div className="border border-green-200 rounded-xl overflow-auto bg-green-50 shadow-inner">
+                    {parsedPreview.length === 0 ? (
+                      <div className="flex items-center justify-center h-full text-slate-500">
+                        未能抓取到任何資料，請檢查必填欄位。
+                      </div>
+                    ) : (
+                      <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead className="bg-green-100 text-green-800 sticky top-0">
+                          <tr>
+                            <th className="p-2 border-b border-green-200 w-10 text-center">#</th>
+                            {Object.keys(parsedPreview[0]).map(k => (
+                              <th key={k} className="p-2 border-b border-green-200 font-bold">{k}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsedPreview.map((row, i) => (
+                            <tr key={i} className="border-b border-green-200/50 hover:bg-green-100/50 bg-white">
+                              <td className="p-2 border-r border-green-100 text-center text-slate-400">{i + 1}</td>
+                              {Object.values(row).map((val: any, j) => (
+                                <td key={j} className="p-2 border-r border-green-100 text-slate-700">{String(val)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  
+                  {/* JSON 視圖 */}
+                  <div className="border border-slate-700 rounded-xl overflow-auto bg-slate-900 text-green-400 p-4 shadow-inner">
+                    <pre className="text-xs font-mono whitespace-pre-wrap">
+                      {JSON.stringify(parsedPreview, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={onCancel}
-              className="px-6 py-2.5 text-slate-600 hover:text-slate-800 font-medium hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              取消匯入
-            </button>
-            <label className="flex items-center gap-2 text-sm font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors">
-              <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4" />
-              🧪 僅試跑解析，不寫入資料庫
-            </label>
-          </div>
-          
           <button 
-            disabled={requiredFieldsMissing}
-            onClick={() => onConfirm(rule, dryRun)}
-            className={`
-              flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm
-              ${requiredFieldsMissing 
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
-              }
-            `}
+            onClick={onCancel}
+            className="px-6 py-2.5 text-slate-600 hover:text-slate-800 font-medium hover:bg-slate-200 rounded-lg transition-colors"
           >
-            確認並開始解析 <ArrowRight className="w-4 h-4" />
+            取消匯入
           </button>
+          
+          {!parsedPreview ? (
+            <button 
+              disabled={requiredFieldsMissing || previewLoading}
+              onClick={handleGeneratePreview}
+              className={`
+                flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm
+                ${requiredFieldsMissing 
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-md'
+                }
+              `}
+            >
+              {previewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+              產生解析預覽
+            </button>
+          ) : (
+            <button 
+              onClick={() => onConfirm(rule)}
+              className="flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm bg-green-600 text-white hover:bg-green-700 hover:shadow-md"
+            >
+              <CheckCircle className="w-5 h-5" />
+              確認無誤，正式寫入資料庫
+            </button>
+          )}
         </div>
       </div>
     </div>

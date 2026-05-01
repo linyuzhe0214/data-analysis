@@ -42,9 +42,14 @@ export default function App() {
   }, [data]);
 
   const availableDirections = useMemo(() => {
-    if (selectedRoute === '國道4號') return ['東向', '西向'];
-    if (selectedRoute === '國道1號' || selectedRoute === '國道3號') return ['南下', '北上'];
-    return Array.from(new Set(data.filter(d => d.route === selectedRoute).map(d => d.direction))).sort();
+    const dataDirs = Array.from(new Set(data.filter(d => d.route === selectedRoute).map(d => d.direction))).filter(Boolean).sort() as string[];
+    const predefined = (selectedRoute === '國道4號') ? ['東向', '西向'] : ['南下', '北上'];
+    const validPredefined = predefined.filter(d => dataDirs.includes(d));
+    const others = dataDirs.filter(d => !predefined.includes(d));
+    
+    // 如果資料中有方向就回傳，都沒有的話才回傳預設的避免畫面出錯
+    const result = [...validPredefined, ...others];
+    return result.length > 0 ? result : predefined;
   }, [selectedRoute, data]);
 
   const years = useMemo(() => Array.from(new Set(data.map(d => d.year))).sort((a: number, b: number) => b - a), [data]);
@@ -113,7 +118,7 @@ export default function App() {
     event.target.value = '';
   };
 
-  const handleWizardConfirm = async (rule: MappingRule, dryRun: boolean) => {
+  const handleWizardConfirm = async (rule: MappingRule) => {
     if (!wizardState) return;
     const { files, type } = wizardState;
     setWizardState(null);
@@ -133,7 +138,7 @@ export default function App() {
           setUploadResults(prev => prev.map(r => r === pending ? { ...r, status: 'error', message: '未抓取到有效資料' } : r));
         } else {
           allParsed = allParsed.concat(parsed);
-          setUploadResults(prev => prev.map(r => r === pending ? { ...r, parsed: parsed.length, status: 'idle', message: dryRun ? '解析完成 (試跑模式)' : '解析完成，等待合併寫入' } : r));
+          setUploadResults(prev => prev.map(r => r === pending ? { ...r, parsed: parsed.length, status: 'idle', message: '解析完成，等待合併寫入' } : r));
         }
       } catch (err: any) {
         setUploadResults(prev => prev.map(r => r === pending ? { ...r, status: 'error', message: String(err?.message ?? err) } : r));
@@ -142,20 +147,8 @@ export default function App() {
 
     // 2. 批次分塊上傳階段 (Batch Chunking)
     if (allParsed.length > 0) {
-      if (dryRun) {
-        // 試跑模式：不寫入資料庫，直接更新 UI 與本地資料
-        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '🧪 試跑完成 (未寫入)' } : r));
-        const mappedToPavementData = allParsed.map(p => ({
-          year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
-          route: p.route || '未知路線',
-          direction: p.direction || '未知方向',
-          lane: p.lane || '外側車道',
-          mileage: Number(p.mileage) || 0,
-          iri: p.avgIri ? Number(p.avgIri) : 0,
-          sn: p.sn ? Number(p.sn) : 0
-        }));
-        setData(prev => [...prev, ...mappedToPavementData]);
-      } else if (import.meta.env.VITE_GAS_URL) {
+      if (import.meta.env.VITE_GAS_URL) {
+        // 先將狀態全部切換為 uploading
         // 先將狀態全部切換為 uploading
         setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'uploading', message: '正在準備寫入...' } : r));
 
