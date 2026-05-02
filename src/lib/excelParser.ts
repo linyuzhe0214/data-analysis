@@ -425,16 +425,35 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
             let sheetGlobalLane = rule.globals.lane;
             if (sheetGlobalLane === '__SHEET_NAME__') sheetGlobalLane = fallbackFromSheet.lane;
 
-            // 處理多區塊 (Side-by-Side) 排列的報表
+            // 處理多區塊 (Side-by-Side) 排列的報表，並做終極防呆
             const headerRow = rows[rule.headerRowIndex] || [];
-            const blockOffsets = [0];
+            let blockOffsets = [0];
+            const normalizedCols = { ...rule.columns };
             
             if (rule.columns.mileage !== undefined && headerRow[rule.columns.mileage]) {
               const mileageHeaderName = headerRow[rule.columns.mileage];
-              for (let c = rule.columns.mileage + 1; c < headerRow.length; c++) {
-                // 如果找到一模一樣的「里程」表頭，代表這是一個新的並排區塊
+              const allMileageIndices: number[] = [];
+              for (let c = 0; c < headerRow.length; c++) {
                 if (headerRow[c] === mileageHeaderName) {
-                  blockOffsets.push(c - rule.columns.mileage);
+                  allMileageIndices.push(c);
+                }
+              }
+
+              if (allMileageIndices.length > 0) {
+                const baseIdx = allMileageIndices[0];
+                blockOffsets = allMileageIndices.map(idx => idx - baseIdx);
+
+                // 如果有多個區塊，將所有對應的欄位 index 強制「正規化」到第一個區塊
+                // 這樣就算使用者不小心點到右半邊的表頭，系統也會自動把它移回左半邊
+                if (blockOffsets.length > 1) {
+                  const blockWidth = blockOffsets[1];
+                  Object.keys(normalizedCols).forEach(k => {
+                    const key = k as keyof MappingRule['columns'];
+                    const val = normalizedCols[key];
+                    if (val !== undefined) {
+                      normalizedCols[key] = val % blockWidth;
+                    }
+                  });
                 }
               }
             }
@@ -447,26 +466,26 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 const getCellRaw = (colIdx?: number) => colIdx !== undefined && colIdx + offset < row.length ? row[colIdx + offset] : '';
                 const getCellStr = (colIdx?: number) => String(getCellRaw(colIdx) ?? '').trim();
                 
-                const mileageRaw = getCellStr(rule.columns.mileage);
+                const mileageRaw = getCellStr(normalizedCols.mileage);
                 if (!mileageRaw) continue; // 里程是必備欄位，若此區塊為空則跳過
 
                 // 處理日期與時間
-                const rawDate = getCellRaw(rule.columns.date);
+                const rawDate = getCellRaw(normalizedCols.date);
                 const dt = normalizeDateTimeValue(rawDate);
                 const dateVal = dt.date || rule.globals.date;
                 
                 // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
-                const timeColVal = getCellStr(rule.columns.time);
+                const timeColVal = getCellStr(normalizedCols.time);
                 let timeVal = timeColVal;
                 if (!timeVal) {
                     timeVal = dt.time;
                 }
 
                 // 其他維度資訊
-                const routeVal = getCellStr(rule.columns.route) || sheetGlobalRoute || '';
-                let dirRaw = getCellStr(rule.columns.direction) || sheetGlobalDirection || '';
+                const routeVal = getCellStr(normalizedCols.route) || sheetGlobalRoute || '';
+                let dirRaw = getCellStr(normalizedCols.direction) || sheetGlobalDirection || '';
                 let directionVal = resolveDirection(dirRaw, routeVal);
-                let laneVal = getCellStr(rule.columns.lane) || sheetGlobalLane || '';
+                let laneVal = getCellStr(normalizedCols.lane) || sheetGlobalLane || '';
 
                 // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
                 if (/^[NSEWnsew]\d+$/.test(laneVal)) {
@@ -484,8 +503,8 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 }
 
               if (type === 'iri') {
-                const iriRaw = getCellStr(rule.columns.iri);
-                const prqiRaw = getCellStr(rule.columns.prqi);
+                const iriRaw = getCellStr(normalizedCols.iri);
+                const prqiRaw = getCellStr(normalizedCols.prqi);
                 if (iriRaw && !isNaN(Number(iriRaw))) {
                   fileResults.push({
                     date: dateVal,
@@ -499,7 +518,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                   });
                 }
               } else if (type === 'sn') {
-                const snRaw = getCellStr(rule.columns.sn);
+                const snRaw = getCellStr(normalizedCols.sn);
                 if (snRaw && !isNaN(Number(snRaw))) {
                   fileResults.push({
                     date: dateVal,
