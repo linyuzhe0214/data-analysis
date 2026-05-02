@@ -131,6 +131,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 6 }}
+                connectNulls={true}
                 hide={hiddenYears.has(year.toString())}
                 strokeOpacity={hiddenYears.has(year.toString()) ? 0.2 : 1}
               />
