@@ -473,8 +473,9 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                    const parsedLane = parseLaneCode(laneVal);
                    // 如果是 SN 報表，強制將車道統一為「外側車道」不分車道
                    laneVal = type === 'sn' ? '外側車道' : parsedLane.lane;
-                   // 如果原本沒有手動指定方向，就採用代碼解析出的方向
-                   if (!dirRaw && !sheetGlobalDirection) {
+                   
+                   // 如果是 SN 報表，我們一律以「車道代碼」(W2/E3) 解析出來的方向為主，無視錯誤的方向對應
+                   if (type === 'sn' || (!dirRaw && !sheetGlobalDirection)) {
                        directionVal = parsedLane.direction;
                    }
                 } else if (type === 'sn') {
