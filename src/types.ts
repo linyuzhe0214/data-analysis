@@ -8,15 +8,16 @@ export interface PavementData {
   sn: number;  // Skid Number
 }
 
-export type IriCondition = 'level1' | 'level2' | 'level3' | 'level4' | 'level5';
+export type IriCondition = 'level1' | 'level2' | 'level3' | 'level4' | 'level5' | 'level6';
 export type SnCondition = 'good' | 'fair' | 'poor';
 
 export const getIriCondition = (iri: number): IriCondition => {
   if (iri <= 1.0) return 'level1';
   if (iri <= 1.3) return 'level2';
   if (iri <= 1.75) return 'level3';
-  if (iri < 2.0) return 'level4';
-  return 'level5';
+  if (iri <= 2.0) return 'level4';
+  if (iri <= 2.5) return 'level5';
+  return 'level6';
 };
 
 export const getSnCondition = (sn: number): SnCondition => {
@@ -30,7 +31,8 @@ export const getIriColor = (iri: number) => {
   if (condition === 'level1') return 'bg-blue-500';
   if (condition === 'level2') return 'bg-green-500';
   if (condition === 'level3') return 'bg-yellow-400';
-  if (condition === 'level4') return 'bg-orange-500';
+  if (condition === 'level4') return 'bg-orange-400';
+  if (condition === 'level5') return 'bg-orange-600';
   return 'bg-red-600';
 };
 

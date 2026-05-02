@@ -16,12 +16,13 @@ interface MileageTrendChartProps {
   data: PavementData[];
   route: string;
   direction: string;
+  lane: string;
   type: 'iri' | 'sn';
 }
 
 const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c', '#4ade80'];
 
-export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, type }) => {
+export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, lane, type }) => {
   const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
 
   const handleLegendClick = (e: any) => {
@@ -38,7 +39,11 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
   };
 
   const chartData = useMemo(() => {
-    const filtered = data.filter(d => d.route === route && d.direction === direction);
+    const filtered = data.filter(d => 
+      d.route === route && 
+      d.direction === direction &&
+      (!lane || d.lane === lane)
+    );
     
     const byMileage: Record<number, any> = {};
     const yearsSet = new Set<number>();

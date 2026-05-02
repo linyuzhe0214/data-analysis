@@ -59,23 +59,27 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
         <div className="flex flex-wrap gap-3 text-sm">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-blue-500"></div>
-            <span className="text-slate-600">IRI ≤ 1</span>
+            <span className="text-slate-600">IRI ≤ 1.0</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-green-500"></div>
-            <span className="text-slate-600">1 &lt; IRI ≤ 1.3</span>
+            <span className="text-slate-600">1.0 &lt; IRI ≤ 1.3</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-yellow-400"></div>
             <span className="text-slate-600">1.3 &lt; IRI ≤ 1.75</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-orange-500"></div>
-            <span className="text-slate-600">1.75 &lt; IRI &lt; 2</span>
+            <div className="w-3 h-3 rounded-sm bg-orange-400"></div>
+            <span className="text-slate-600">1.75 &lt; IRI ≤ 2.0</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm bg-orange-600"></div>
+            <span className="text-slate-600">2.0 &lt; IRI ≤ 2.5</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-red-600"></div>
-            <span className="text-slate-600">IRI ≥ 2</span>
+            <span className="text-slate-600">IRI &gt; 2.5</span>
           </div>
         </div>
       </div>
@@ -99,11 +103,16 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
         ))}
 
         {/* Axis Labels */}
-        <div className="absolute bottom-0 left-[5.5rem] text-xs font-medium text-slate-500">
-          {minMileage}k
-        </div>
-        <div className="absolute bottom-0 right-0 text-xs font-medium text-slate-500">
-          {maxMileage}k
+        <div className="absolute bottom-0 left-[5.5rem] right-0 h-8 flex justify-between items-end px-1 pointer-events-none">
+          {Array.from({ length: 11 }).map((_, i) => {
+            const m = minMileage + (maxMileage - minMileage) * (i / 10);
+            return (
+              <div key={i} className="text-[10px] text-slate-500 flex flex-col items-center">
+                <div className="w-px h-1.5 bg-slate-300 mb-0.5"></div>
+                {m.toFixed(1)}k
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

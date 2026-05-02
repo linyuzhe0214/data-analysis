@@ -24,6 +24,7 @@ export default function App() {
   const [data, setData] = useState<PavementData[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
+  const [selectedLane, setSelectedLane] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | ''>('');
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
@@ -52,6 +53,16 @@ export default function App() {
     return result.length > 0 ? result : predefined;
   }, [selectedRoute, data]);
 
+  const availableLanes = useMemo(() => {
+    const dataLanes = Array.from(new Set(data.filter(d => d.route === selectedRoute && d.direction === selectedDirection).map(d => d.lane))).filter(Boolean) as string[];
+    const laneOrder = ['內側車道', '中線車道', '外側車道'];
+    return dataLanes.sort((a, b) => {
+      const idxA = laneOrder.indexOf(a);
+      const idxB = laneOrder.indexOf(b);
+      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+  }, [selectedRoute, selectedDirection, data]);
+
   const years = useMemo(() => Array.from(new Set(data.map(d => d.year))).sort((a: number, b: number) => b - a), [data]);
 
   useEffect(() => {
@@ -66,6 +77,12 @@ export default function App() {
       setSelectedDirection(availableDirections[0]);
     }
   }, [availableDirections, selectedDirection]);
+
+  useEffect(() => {
+    if (availableLanes.length > 0 && !availableLanes.includes(selectedLane)) {
+      setSelectedLane(availableLanes[0]);
+    }
+  }, [availableLanes, selectedLane]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -245,35 +262,38 @@ export default function App() {
     return data.filter(d => 
       d.route === selectedRoute && 
       d.direction === selectedDirection && 
-      d.year === selectedYear
+      d.year === selectedYear &&
+      (!selectedLane || d.lane === selectedLane)
     );
-  }, [data, selectedRoute, selectedDirection, selectedYear]);
+  }, [data, selectedRoute, selectedDirection, selectedYear, selectedLane]);
 
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
-    const trendData = data.filter(d => d.route === selectedRoute && d.direction === selectedDirection);
-    if (trendData.length === 0) return null;
+    const statsData = currentViewData;
+    if (statsData.length === 0) return null;
     
-    const avgIri = trendData.reduce((acc, curr) => acc + curr.iri, 0) / trendData.length;
-    const avgSn = trendData.reduce((acc, curr) => acc + curr.sn, 0) / trendData.length;
+    const iriData = statsData.filter(d => d.iri > 0);
+    const snData = statsData.filter(d => d.sn > 0);
+
+    const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
+    const avgSn = snData.length > 0 ? snData.reduce((acc, curr) => acc + curr.sn, 0) / snData.length : 0;
     
-    const poorIriCount = trendData.filter(d => d.iri >= 2.0).length;
-    const poorPercent = (poorIriCount / trendData.length) * 100;
+    const pct175 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 1.75).length / iriData.length * 100) : 0;
+    const pct20 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.0).length / iriData.length * 100) : 0;
+    const pct25 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.5).length / iriData.length * 100) : 0;
 
-    const iriGte1Count = trendData.filter(d => d.iri >= 1.0).length;
-    const iriGte1Percent = (iriGte1Count / trendData.length) * 100;
-
-    const mileages: number[] = Array.from(new Set<number>(trendData.map(d => d.mileage)));
+    const mileages: number[] = Array.from(new Set<number>(statsData.map(d => d.mileage)));
     const totalLength = mileages.length > 0 ? Math.max(...mileages) - Math.min(...mileages) : 0;
 
     return {
       avgIri: avgIri.toFixed(2),
       avgSn: avgSn.toFixed(1),
-      poorPercent: poorPercent.toFixed(1),
-      iriGte1Percent: iriGte1Percent.toFixed(1),
+      pct175: pct175.toFixed(1),
+      pct20: pct20.toFixed(1),
+      pct25: pct25.toFixed(1),
       totalLength: totalLength.toFixed(1)
     };
-  }, [data, selectedRoute, selectedDirection, activeTab]);
+  }, [currentViewData, activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -398,21 +418,33 @@ export default function App() {
               </div>
               
               {activeTab === 'trends' && (
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-600">方向:</label>
-                  <select 
-                    value={selectedDirection} 
-                    onChange={(e) => setSelectedDirection(e.target.value)}
-                    className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  >
-                    {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-slate-600">方向:</label>
+                    <select 
+                      value={selectedDirection} 
+                      onChange={(e) => setSelectedDirection(e.target.value)}
+                      className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-slate-600">車道:</label>
+                    <select 
+                      value={selectedLane} 
+                      onChange={(e) => setSelectedLane(e.target.value)}
+                      className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                </>
               )}
 
-              {activeTab === 'iri-map' && (
+              {(activeTab === 'iri-map' || activeTab === 'trends') && (
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-600">年度 (僅色塊圖與統計適用):</label>
+                  <label className="text-sm font-medium text-slate-600">年度 (統計與色塊圖):</label>
                   <select 
                     value={selectedYear} 
                     onChange={(e) => setSelectedYear(Number(e.target.value))}
@@ -519,56 +551,53 @@ export default function App() {
               ) : (
               <div className="space-y-6">
                 {stats && (
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-                      <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                        <Activity className="w-6 h-6" />
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <Activity className="w-4 h-4" />
+                        <span className="text-xs font-medium">平均 IRI</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">平均 IRI</p>
-                        <p className="text-2xl font-bold text-slate-800">{stats.avgIri}</p>
-                      </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
                     </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-                      <div className="p-3 bg-purple-50 text-purple-600 rounded-lg">
-                        <Activity className="w-6 h-6" />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-purple-600">
+                        <Activity className="w-4 h-4" />
+                        <span className="text-xs font-medium">平均 SN</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">平均 SN</p>
-                        <p className="text-2xl font-bold text-slate-800">{stats.avgSn}</p>
-                      </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
                     </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-                      <div className="p-3 bg-orange-50 text-orange-600 rounded-lg">
-                        <AlertTriangle className="w-6 h-6" />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-yellow-600">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-medium">IRI ≥ 1.75</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">需注意比例 (IRI ≥ 1)</p>
-                        <p className="text-2xl font-bold text-slate-800">{stats.iriGte1Percent}%</p>
-                      </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.pct175}%</p>
                     </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-                      <div className="p-3 bg-red-50 text-red-600 rounded-lg">
-                        <AlertTriangle className="w-6 h-6" />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-orange-600">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-medium">IRI ≥ 2.0</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">不良比例 (IRI ≥ 2)</p>
-                        <p className="text-2xl font-bold text-slate-800">{stats.poorPercent}%</p>
-                      </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.pct20}%</p>
                     </div>
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-                      <div className="p-3 bg-green-50 text-green-600 rounded-lg">
-                        <CheckCircle className="w-6 h-6" />
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-medium">IRI ≥ 2.5</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">分析總長度</p>
-                        <p className="text-2xl font-bold text-slate-800">{stats.totalLength} km</p>
+                      <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-xs font-medium">單年分析長度</span>
                       </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
                     </div>
                   </div>
                 )}
-                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} type="iri" />
-                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} type="sn" />
+                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="iri" />
+                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="sn" />
               </div>
               )
             )}
