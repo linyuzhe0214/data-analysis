@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -22,6 +22,21 @@ interface MileageTrendChartProps {
 const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c', '#4ade80'];
 
 export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, type }) => {
+  const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
+
+  const handleLegendClick = (e: any) => {
+    const dataKey = String(e.dataKey);
+    setHiddenYears(prev => {
+      const next = new Set(prev);
+      if (next.has(dataKey)) {
+        next.delete(dataKey);
+      } else {
+        next.add(dataKey);
+      }
+      return next;
+    });
+  };
+
   const chartData = useMemo(() => {
     const filtered = data.filter(d => d.route === route && d.direction === direction);
     
@@ -94,7 +109,10 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
               contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               labelFormatter={(label) => `里程: ${label}k`}
             />
-            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+            <Legend 
+              wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }} 
+              onClick={handleLegendClick}
+            />
             {type === 'iri' && (
               <>
                 <ReferenceLine y={1.0} stroke="#3b82f6" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=1.0', fill: '#3b82f6', fontSize: 12 }} />
@@ -113,6 +131,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 6 }}
+                hide={hiddenYears.has(year.toString())}
+                strokeOpacity={hiddenYears.has(year.toString()) ? 0.2 : 1}
               />
             ))}
           </LineChart>

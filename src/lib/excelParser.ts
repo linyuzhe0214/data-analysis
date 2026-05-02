@@ -425,33 +425,62 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
             let sheetGlobalLane = rule.globals.lane;
             if (sheetGlobalLane === '__SHEET_NAME__') sheetGlobalLane = fallbackFromSheet.lane;
 
+            // 處理多區塊 (Side-by-Side) 排列的報表
+            const headerRow = rows[rule.headerRowIndex] || [];
+            const blockOffsets = [0];
+            
+            if (rule.columns.mileage !== undefined && headerRow[rule.columns.mileage]) {
+              const mileageHeaderName = headerRow[rule.columns.mileage];
+              for (let c = rule.columns.mileage + 1; c < headerRow.length; c++) {
+                // 如果找到一模一樣的「里程」表頭，代表這是一個新的並排區塊
+                if (headerRow[c] === mileageHeaderName) {
+                  blockOffsets.push(c - rule.columns.mileage);
+                }
+              }
+            }
+
             for (let r = rule.headerRowIndex + 1; r < rows.length; r++) {
               const row = rows[r];
               if (!row || row.length === 0) continue;
 
-              const getCellRaw = (colIdx?: number) => colIdx !== undefined && colIdx >= 0 ? row[colIdx] : '';
-              const getCellStr = (colIdx?: number) => String(getCellRaw(colIdx) ?? '').trim();
-              
-              const mileageRaw = getCellStr(rule.columns.mileage);
-              if (!mileageRaw) continue; // 里程是必備欄位
+              for (const offset of blockOffsets) {
+                const getCellRaw = (colIdx?: number) => colIdx !== undefined && colIdx + offset < row.length ? row[colIdx + offset] : '';
+                const getCellStr = (colIdx?: number) => String(getCellRaw(colIdx) ?? '').trim();
+                
+                const mileageRaw = getCellStr(rule.columns.mileage);
+                if (!mileageRaw) continue; // 里程是必備欄位，若此區塊為空則跳過
 
-              // 處理日期與時間
-              const rawDate = getCellRaw(rule.columns.date);
-              const dt = normalizeDateTimeValue(rawDate);
-              const dateVal = rule.globals.date || dt.date;
-              
-              // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
-              const timeColVal = getCellStr(rule.columns.time);
-              let timeVal = timeColVal;
-              if (!timeVal) {
-                  timeVal = dt.time;
-              }
+                // 處理日期與時間
+                const rawDate = getCellRaw(rule.columns.date);
+                const dt = normalizeDateTimeValue(rawDate);
+                const dateVal = dt.date || rule.globals.date;
+                
+                // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
+                const timeColVal = getCellStr(rule.columns.time);
+                let timeVal = timeColVal;
+                if (!timeVal) {
+                    timeVal = dt.time;
+                }
 
-              // 其他維度資訊
-              const routeVal = getCellStr(rule.columns.route) || sheetGlobalRoute || '';
-              const dirRaw = getCellStr(rule.columns.direction) || sheetGlobalDirection || '';
-              const directionVal = resolveDirection(dirRaw, routeVal);
-              const laneVal = getCellStr(rule.columns.lane) || sheetGlobalLane || '';
+                // 其他維度資訊
+                const routeVal = getCellStr(rule.columns.route) || sheetGlobalRoute || '';
+                let dirRaw = getCellStr(rule.columns.direction) || sheetGlobalDirection || '';
+                let directionVal = resolveDirection(dirRaw, routeVal);
+                let laneVal = getCellStr(rule.columns.lane) || sheetGlobalLane || '';
+
+                // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
+                if (/^[NSEWnsew]\d+$/.test(laneVal)) {
+                   const parsedLane = parseLaneCode(laneVal);
+                   // 如果是 SN 報表，強制將車道統一為「外側車道」不分車道
+                   laneVal = type === 'sn' ? '外側車道' : parsedLane.lane;
+                   // 如果原本沒有手動指定方向，就採用代碼解析出的方向
+                   if (!dirRaw && !sheetGlobalDirection) {
+                       directionVal = parsedLane.direction;
+                   }
+                } else if (type === 'sn') {
+                   // 即使不是代碼，SN 報表也一律歸類為外側車道
+                   laneVal = '外側車道';
+                }
 
               if (type === 'iri') {
                 const iriRaw = getCellStr(rule.columns.iri);
@@ -481,7 +510,8 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                   });
                 }
               }
-            }
+            } // end of offset loop
+          } // end of row loop
           });
           resolve(fileResults);
         } catch (err) {

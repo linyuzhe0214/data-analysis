@@ -198,7 +198,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
                     {type === 'iri' && <FieldSelect label="時間" value={rule.columns.time} options={headerRow} onChange={(v) => handleColumnChange('time', v)} />}
                     <FieldSelect label="路線" value={rule.columns.route} options={headerRow} onChange={(v) => handleColumnChange('route', v)} />
                     <FieldSelect label="方向" value={rule.columns.direction} options={headerRow} onChange={(v) => handleColumnChange('direction', v)} />
-                    {type === 'iri' && <FieldSelect label="車道" value={rule.columns.lane} options={headerRow} onChange={(v) => handleColumnChange('lane', v)} />}
+                    <FieldSelect label="車道" value={rule.columns.lane} options={headerRow} onChange={(v) => handleColumnChange('lane', v)} />
                   </div>
                 </div>
               )}
@@ -218,7 +218,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
                 <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="例如: 2024-05-01" />
                 <GlobalSelect label="預設路線" value={rule.globals.route} onChange={(v) => handleGlobalChange('route', v)} />
                 <GlobalSelect label="預設方向" value={rule.globals.direction} onChange={(v) => handleGlobalChange('direction', v)} />
-                {type === 'iri' && <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />}
+                <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />
               </div>
             </div>
           </div>
