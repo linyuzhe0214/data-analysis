@@ -1,11 +1,8 @@
 /// <reference types="vite/client" />
 import { RawSnData, RawIriData } from './excelParser';
 
-// dev 走 Vite proxy，prod 直連 GAS
-// 若兩者都沒設，GAS_URL = ''
-export const GAS_URL: string = import.meta.env.DEV
-  ? '/api/gas'
-  : (import.meta.env.VITE_GAS_URL ?? '');
+// 統一從環境變數讀取 GAS 網址，不管是開發還是正式環境都直連 GAS
+export const GAS_URL: string = import.meta.env.VITE_GAS_URL || '';
 
 interface UploadResult {
   success: boolean;
