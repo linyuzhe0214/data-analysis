@@ -20,8 +20,27 @@ interface UploadResult {
   message?: string;
 }
 
+const LS_KEY = 'pavement_data_v1';
+
+function loadFromLocalStorage(): PavementData[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
-  const [data, setData] = useState<PavementData[]>([]);
+  const [data, setData] = useState<PavementData[]>(loadFromLocalStorage);
+
+  const setDataPersist = (updater: PavementData[] | ((prev: PavementData[]) => PavementData[])) => {
+    setData(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
@@ -187,7 +206,7 @@ export default function App() {
         iri: p.avgIri ? Number(p.avgIri) : 0,
         sn: p.sn ? Number(p.sn) : 0
       }));
-      setData(prev => [...prev, ...mappedToPavementData]);
+      setDataPersist(prev => [...prev, ...mappedToPavementData]);
 
       if (GAS_URL) {
         // ── 有 GAS：分塊上傳 ──
@@ -232,7 +251,7 @@ export default function App() {
         // ── 沒有 GAS：僅本地 ──
         setUploadResults(prev => prev.map(r =>
           (r.type === type && r.status === 'idle')
-            ? { ...r, status: 'done', inserted: r.parsed, message: '未設定 GAS，僅本地解析' }
+            ? { ...r, status: 'done', inserted: r.parsed, message: '已寫入本地資料庫' }
             : r
         ));
       }
@@ -242,7 +261,12 @@ export default function App() {
   };
 
   const loadMockData = () => {
-    setData(generateMockData());
+    setDataPersist(generateMockData());
+  };
+
+  const clearLocalData = () => {
+    localStorage.removeItem(LS_KEY);
+    setData([]);
   };
 
   const currentViewData = useMemo(() => {
@@ -451,12 +475,21 @@ export default function App() {
                     <Database className="w-4 h-4 text-blue-500" />
                     上傳紀錄
                   </span>
-                  <button
-                    onClick={() => setUploadResults([])}
-                    className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    清除
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={clearLocalData}
+                      className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                      title="清除本地資料庫（localStorage）"
+                    >
+                      清除本地資料庫
+                    </button>
+                    <button
+                      onClick={() => setUploadResults([])}
+                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      清除紀錄
+                    </button>
+                  </div>
                 </div>
                 <div className="divide-y divide-slate-50">
                   {uploadResults.map((r, idx) => (
