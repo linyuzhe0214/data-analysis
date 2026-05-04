@@ -1,7 +1,10 @@
 /// <reference types="vite/client" />
 import { RawSnData, RawIriData } from './excelParser';
 
-const GAS_URL = import.meta.env.VITE_GAS_URL ?? '';
+// dev 環境走 Vite proxy（/api/gas）繞過 CORS；prod 直連 GAS
+const GAS_URL = import.meta.env.DEV
+  ? '/api/gas'
+  : (import.meta.env.VITE_GAS_URL ?? '');
 
 interface UploadResult {
   success: boolean;

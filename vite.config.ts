@@ -5,9 +5,18 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const gasUrl = env.VITE_GAS_URL || '';
+
+  // GAS URL 拆解：取 origin + path，供 proxy 用
+  let gasOrigin = '';
+  let gasPath = '';
+  try {
+    const u = new URL(gasUrl);
+    gasOrigin = u.origin;
+    gasPath   = u.pathname;
+  } catch (_) {}
+
   return {
-    // GitHub Pages 部署時設定 repo 路徑，例如 /data-analysis/
-    // 本機開發不需要設定（預設 '/'）
     base: env.VITE_BASE_PATH || '/',
     plugins: [react(), tailwindcss()],
     define: {
@@ -20,6 +29,15 @@ export default defineConfig(({mode}) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      // 本機開發時把 /api/gas 轉發到 GAS，避免 CORS
+      proxy: gasOrigin ? {
+        '/api/gas': {
+          target: gasOrigin,
+          changeOrigin: true,
+          rewrite: () => gasPath,
+          followRedirects: true,
+        },
+      } : {},
     },
   };
 });

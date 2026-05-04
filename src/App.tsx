@@ -177,7 +177,7 @@ export default function App() {
         return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
       };
 
-      if (import.meta.env.VITE_GAS_URL) {
+      if (import.meta.env.DEV || import.meta.env.VITE_GAS_URL) {
         // 先將狀態全部切換為 uploading
         // 先將狀態全部切換為 uploading
         setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'uploading', message: '正在準備寫入...' } : r));
