@@ -44,8 +44,8 @@ export default function App() {
 
   const data = useMemo(() => {
     return rawData.map(d => {
-      if (d.route.includes('4') && (d.lane === '第二車道' || d.lane === '第三車道')) {
-        return { ...d, lane: '第二及第三車道' };
+      if (d.route.includes('4') && ['第二車道', '第三車道', '第2車道', '第3車道'].includes(d.lane)) {
+        return { ...d, lane: '第2及第3車道' };
       }
       return d;
     });
@@ -456,7 +456,6 @@ export default function App() {
                       onChange={(e) => setSelectedLane(e.target.value)}
                       className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     >
-                      <option value="">全車道 (各車道比較)</option>
                       {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
                   </div>
