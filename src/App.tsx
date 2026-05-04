@@ -134,7 +134,7 @@ export default function App() {
           }));
         
         if (parsedData.length > 0) {
-          setData(parsedData);
+          setDataPersist(parsedData);
         } else {
           alert('無法解析資料，請確認 CSV 格式包含: year, route, direction, mileage, iri, sn');
         }
@@ -275,7 +275,7 @@ export default function App() {
 
   const clearLocalData = () => {
     localStorage.removeItem(LS_KEY);
-    setData([]);
+    setDataPersist([]);
   };
 
   const currentViewData = useMemo(() => {
