@@ -36,6 +36,7 @@ jobs:
       - name: Build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_GAS_URL: ${{ secrets.VITE_GAS_URL }}
           # 將 /repo-name/ 改成你的 GitHub 倉庫名稱
           VITE_BASE_PATH: /data-analysis/
         run: npm run build
