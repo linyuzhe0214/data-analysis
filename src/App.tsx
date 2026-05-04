@@ -7,7 +7,7 @@ import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
-import { uploadSNData, uploadIRIData } from './lib/gasService';
+import { uploadSNData, uploadIRIData, GAS_URL } from './lib/gasService';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 
@@ -177,77 +177,64 @@ export default function App() {
         return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
       };
 
-      if (import.meta.env.DEV || import.meta.env.VITE_GAS_URL) {
-        // 先將狀態全部切換為 uploading
-        // 先將狀態全部切換為 uploading
-        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'uploading', message: '正在準備寫入...' } : r));
+      // 無論有沒有 GAS，先把資料更新到本地儀表板
+      const mappedToPavementData = allParsed.map(p => ({
+        year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+        route: p.route || '未知路線',
+        direction: p.direction || '未知方向',
+        lane: p.lane || '外側車道',
+        mileage: parseMileageToNumber(p.mileage),
+        iri: p.avgIri ? Number(p.avgIri) : 0,
+        sn: p.sn ? Number(p.sn) : 0
+      }));
+      setData(prev => [...prev, ...mappedToPavementData]);
 
-        const CHUNK_SIZE = 1000; // 每 1000 筆更新一次進度，避免畫面停頓感
+      if (GAS_URL) {
+        // ── 有 GAS：分塊上傳 ──
+        setUploadResults(prev => prev.map(r =>
+          (r.type === type && r.status === 'idle')
+            ? { ...r, status: 'uploading', message: '正在寫入資料庫...' }
+            : r
+        ));
+
+        const CHUNK_SIZE = 500;
         let totalInserted = 0;
         let hasError = false;
 
         for (let i = 0; i < allParsed.length; i += CHUNK_SIZE) {
           const chunk = allParsed.slice(i, i + CHUNK_SIZE);
-          
-          // 動態更新進度
-          setUploadResults(prev => prev.map(r => 
-            (r.type === type && r.status === 'uploading') 
-              ? { ...r, message: `正在寫入... (${Math.min(i + CHUNK_SIZE, allParsed.length)} / ${allParsed.length} 筆)` } 
+          setUploadResults(prev => prev.map(r =>
+            (r.type === type && r.status === 'uploading')
+              ? { ...r, message: `寫入中... (${Math.min(i + CHUNK_SIZE, allParsed.length)} / ${allParsed.length} 筆)` }
               : r
           ));
-
           try {
             const res = type === 'iri' ? await uploadIRIData(chunk) : await uploadSNData(chunk);
-            if (res.success) {
-              totalInserted += (res.inserted ?? chunk.length);
-            } else {
-              hasError = true;
-            }
-          } catch (err) {
+            if (res.success) totalInserted += (res.inserted ?? chunk.length);
+            else hasError = true;
+          } catch {
             hasError = true;
           }
         }
 
-        // 結算狀態並即時更新儀表板資料
-        setUploadResults(prev => prev.map(r => 
-          (r.type === type && r.status === 'uploading') 
-            ? { 
-                ...r, 
-                status: (hasError && totalInserted === 0) ? 'error' : 'done', 
-                inserted: r.parsed, 
-                message: hasError ? `部分上傳失敗 (本次總計寫入 ${totalInserted} 筆)` : '' 
-              } 
+        setUploadResults(prev => prev.map(r =>
+          (r.type === type && r.status === 'uploading')
+            ? {
+                ...r,
+                status: (hasError && totalInserted === 0) ? 'error' : 'done',
+                inserted: totalInserted || r.parsed,
+                message: hasError ? `部分失敗，已寫入 ${totalInserted} 筆` : ''
+              }
             : r
         ));
 
-        // 成功寫入資料庫後，直接將新資料加入本地狀態，讓儀表板馬上更新！
-        if (totalInserted > 0) {
-          const mappedToPavementData = allParsed.map(p => ({
-            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
-            route: p.route || '未知路線',
-            direction: p.direction || '未知方向',
-            lane: p.lane || '外側車道',
-            mileage: parseMileageToNumber(p.mileage),
-            iri: p.avgIri ? Number(p.avgIri) : 0,
-            sn: p.sn ? Number(p.sn) : 0
-          }));
-          setData(prev => [...prev, ...mappedToPavementData]);
-        }
-
       } else {
-        // 沒有 GAS URL 的本地測試狀況
-        setUploadResults(prev => prev.map(r => (r.type === type && r.status === 'idle') ? { ...r, status: 'done', inserted: r.parsed, message: '未設定 GAS，僅本地解析' } : r));
-        
-        const mappedToPavementData = allParsed.map(p => ({
-          year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
-          route: p.route || '未知路線',
-          direction: p.direction || '未知方向',
-          lane: p.lane || '外側車道',
-          mileage: parseMileageToNumber(p.mileage),
-          iri: p.avgIri ? Number(p.avgIri) : 0,
-          sn: p.sn ? Number(p.sn) : 0
-        }));
-        setData(prev => [...prev, ...mappedToPavementData]);
+        // ── 沒有 GAS：僅本地 ──
+        setUploadResults(prev => prev.map(r =>
+          (r.type === type && r.status === 'idle')
+            ? { ...r, status: 'done', inserted: r.parsed, message: '未設定 GAS，僅本地解析' }
+            : r
+        ));
       }
     }
 
