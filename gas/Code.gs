@@ -50,8 +50,18 @@ function doPost(e) {
     }
 
     if (type === 'sn') {
-      // SN：統一寫入 SN_Data
-      appendRows(SN_SHEET, SN_HEADERS, records);
+      // SN：依 route (國道別) 分組，各寫一個工作表
+      var groups = {};
+      records.forEach(function(r) {
+        var routeSafe = (r.route || '未知路線').replace(/[\\\/\?\*\[\]]/g, '');
+        var key = 'SN_' + routeSafe;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      });
+
+      Object.keys(groups).forEach(function(sheetName) {
+        appendRows(sheetName, SN_HEADERS, groups[sheetName]);
+      });
 
     } else {
       // IRI：依 route + direction + lane 分組，各寫一個工作表
@@ -78,7 +88,18 @@ function doGet(e) {
     const type = (e.parameter.type || '').toLowerCase();
 
     if (type === 'sn') {
-      return jsonResponse({ success: true, data: readSheet(SN_SHEET, SN_HEADERS) });
+      // 掃描所有 SN_ 開頭的工作表（包含原本的 SN_Data 或 SN_國道X號），合併回傳
+      const ss     = SpreadsheetApp.openById(SS_ID);
+      const sheets = ss.getSheets().filter(function(s) {
+        return s.getName().indexOf('SN_') === 0;
+      });
+
+      var allData = [];
+      sheets.forEach(function(sheet) {
+        allData = allData.concat(readSheetObj(sheet, SN_HEADERS));
+      });
+
+      return jsonResponse({ success: true, data: allData });
 
     } else if (type === 'iri') {
       // 掃描所有 IRI_ 開頭的工作表，合併回傳

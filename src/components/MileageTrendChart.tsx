@@ -47,35 +47,41 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
     );
     
     const byMileage: Record<number, any> = {};
-    const yearsSet = new Set<number>();
+    const keysSet = new Set<string>();
 
     filtered.forEach(d => {
       if (!byMileage[d.mileage]) {
         byMileage[d.mileage] = { mileage: d.mileage };
       }
-      if (!byMileage[d.mileage][d.year]) {
-        byMileage[d.mileage][d.year] = { sum: 0, count: 0 };
+      
+      const dataKey = d.year.toString();
+
+      if (!byMileage[d.mileage][dataKey]) {
+        byMileage[d.mileage][dataKey] = { sum: 0, count: 0 };
       }
-      byMileage[d.mileage][d.year].sum += type === 'iri' ? d.iri : d.sn;
-      byMileage[d.mileage][d.year].count += 1;
-      yearsSet.add(d.year);
+      byMileage[d.mileage][dataKey].sum += type === 'iri' ? d.iri : d.sn;
+      byMileage[d.mileage][dataKey].count += 1;
+      keysSet.add(dataKey);
     });
 
     const processedData = Object.values(byMileage).map((item: any) => {
       const result: any = { mileage: item.mileage };
-      yearsSet.forEach(year => {
-        if (item[year]) {
-          result[year] = Number((item[year].sum / item[year].count).toFixed(2));
+      keysSet.forEach(key => {
+        if (item[key]) {
+          result[key] = Number((item[key].sum / item[key].count).toFixed(2));
         }
       });
       return result;
     }).sort((a, b) => a.mileage - b.mileage);
 
+    // 對 keys 進行排序，先依年份排序
+    const sortedKeys = Array.from(keysSet).sort((a, b) => a.localeCompare(b));
+
     return {
       data: processedData,
-      years: Array.from(yearsSet).sort()
+      keys: sortedKeys
     };
-  }, [data, route, direction, type]);
+  }, [data, route, direction, type, lane]);
 
   if (chartData.data.length === 0) {
     return (
@@ -127,19 +133,19 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 <ReferenceLine y={2.0} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=2.0', fill: '#ef4444', fontSize: 12 }} />
               </>
             )}
-            {chartData.years.map((year, index) => (
+            {chartData.keys.map((key, index) => (
               <Line 
-                key={year}
+                key={key}
                 type="monotone" 
-                dataKey={year.toString()} 
-                name={`${year}年`} 
+                dataKey={key} 
+                name={`${key}年`} 
                 stroke={COLORS[index % COLORS.length]} 
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 6 }}
                 connectNulls={true}
-                hide={hiddenYears.has(year.toString())}
-                strokeOpacity={hiddenYears.has(year.toString()) ? 0.2 : 1}
+                hide={hiddenYears.has(key)}
+                strokeOpacity={hiddenYears.has(key) ? 0.2 : 1}
               />
             ))}
           </LineChart>

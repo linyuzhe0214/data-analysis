@@ -32,15 +32,24 @@ function loadFromLocalStorage(): PavementData[] {
 }
 
 export default function App() {
-  const [data, setData] = useState<PavementData[]>(loadFromLocalStorage);
+  const [rawData, setRawData] = useState<PavementData[]>(loadFromLocalStorage);
 
   const setDataPersist = (updater: PavementData[] | ((prev: PavementData[]) => PavementData[])) => {
-    setData(prev => {
+    setRawData(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   };
+
+  const data = useMemo(() => {
+    return rawData.map(d => {
+      if (d.route.includes('4') && (d.lane === '第二車道' || d.lane === '第三車道')) {
+        return { ...d, lane: '第二及第三車道' };
+      }
+      return d;
+    });
+  }, [rawData]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
@@ -447,6 +456,7 @@ export default function App() {
                       onChange={(e) => setSelectedLane(e.target.value)}
                       className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     >
+                      <option value="">全車道 (各車道比較)</option>
                       {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
                   </div>
