@@ -292,51 +292,41 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
               </div>
             </div>
 
-            {/* 區塊 2: 轉換後 JSON 驗證 */}
+            {/* 區塊 2: 轉換後資料驗證 */}
             {parsedPreview && (
-              <div className="h-96 flex flex-col border-t border-slate-200 pt-6">
+              <div className="flex flex-col border-t border-slate-200 pt-6">
                 <h3 className="text-base font-bold text-green-700 mb-2 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5" /> 準備寫入 GOOGLE 的資料驗證 (前 5 筆)
+                  <CheckCircle className="w-5 h-5" /> 準備寫入的資料預覽 (前 5 筆)
                 </h3>
-                <p className="text-sm text-slate-500 mb-4">您可以透過下方表格或原始 JSON 陣列，確認資料結構與欄位名稱是否正確。</p>
+                <p className="text-sm text-slate-500 mb-4">確認欄位名稱與數值無誤後，即可正式寫入資料庫。</p>
                 
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
-                  {/* 表格視圖 */}
-                  <div className="border border-green-200 rounded-xl overflow-auto bg-green-50 shadow-inner">
-                    {parsedPreview.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-slate-500">
-                        未能抓取到任何資料，請檢查必填欄位。
-                      </div>
-                    ) : (
-                      <table className="w-full text-sm text-left whitespace-nowrap">
-                        <thead className="bg-green-100 text-green-800 sticky top-0">
-                          <tr>
-                            <th className="p-2 border-b border-green-200 w-10 text-center">#</th>
-                            {Object.keys(parsedPreview[0]).map(k => (
-                              <th key={k} className="p-2 border-b border-green-200 font-bold">{k}</th>
+                <div className="border border-green-200 rounded-xl overflow-auto bg-green-50 shadow-inner">
+                  {parsedPreview.length === 0 ? (
+                    <div className="flex items-center justify-center h-24 text-slate-500 text-sm">
+                      未能抓取到任何資料，請檢查必填欄位。
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                      <thead className="bg-green-100 text-green-800 sticky top-0">
+                        <tr>
+                          <th className="p-2 border-b border-green-200 w-10 text-center">#</th>
+                          {Object.keys(parsedPreview[0]).map(k => (
+                            <th key={k} className="p-2 border-b border-green-200 font-bold">{k}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsedPreview.map((row, i) => (
+                          <tr key={i} className="border-b border-green-200/50 hover:bg-green-100/50 bg-white">
+                            <td className="p-2 border-r border-green-100 text-center text-slate-400">{i + 1}</td>
+                            {Object.values(row).map((val: any, j) => (
+                              <td key={j} className="p-2 border-r border-green-100 text-slate-700">{String(val)}</td>
                             ))}
                           </tr>
-                        </thead>
-                        <tbody>
-                          {parsedPreview.map((row, i) => (
-                            <tr key={i} className="border-b border-green-200/50 hover:bg-green-100/50 bg-white">
-                              <td className="p-2 border-r border-green-100 text-center text-slate-400">{i + 1}</td>
-                              {Object.values(row).map((val: any, j) => (
-                                <td key={j} className="p-2 border-r border-green-100 text-slate-700">{String(val)}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                  
-                  {/* JSON 視圖 */}
-                  <div className="border border-slate-700 rounded-xl overflow-auto bg-slate-900 text-green-400 p-4 shadow-inner">
-                    <pre className="text-xs font-mono whitespace-pre-wrap">
-                      {JSON.stringify(parsedPreview, null, 2)}
-                    </pre>
-                  </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             )}

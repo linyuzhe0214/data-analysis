@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 import { RawSnData, RawIriData } from './excelParser';
 
-// ← 部署後填入你的 GAS Web App URL
 const GAS_URL = import.meta.env.VITE_GAS_URL ?? '';
 
 interface UploadResult {
@@ -10,33 +9,39 @@ interface UploadResult {
   error?: string;
 }
 
-/**
- * 將解析完的 SN 資料上傳至 GAS 資料庫
- */
+/** 將物件陣列序列化為 CSV 字串（header + rows） */
+function toCsv(headers: string[], records: Record<string, any>[]): string {
+  const escape = (v: any) => {
+    const s = String(v ?? '');
+    // 有逗號、雙引號或換行時加引號
+    return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = records.map(r => headers.map(h => escape(r[h])).join(','));
+  return [headers.join(','), ...rows].join('\n');
+}
+
 export const uploadSNData = async (records: RawSnData[]): Promise<UploadResult> => {
   if (!GAS_URL) throw new Error('VITE_GAS_URL 未設定');
-  const res = await fetch(GAS_URL, {
+  const SN_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
+  const res = await fetch(`${GAS_URL}?type=sn`, {
     method: 'POST',
-    body: JSON.stringify({ type: 'sn', records }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: toCsv(SN_HEADERS, records),
   });
   return res.json();
 };
 
-/**
- * 將解析完的 IRI 資料上傳至 GAS 資料庫
- */
 export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult> => {
   if (!GAS_URL) throw new Error('VITE_GAS_URL 未設定');
-  const res = await fetch(GAS_URL, {
+  const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
+  const res = await fetch(`${GAS_URL}?type=iri`, {
     method: 'POST',
-    body: JSON.stringify({ type: 'iri', records }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: toCsv(IRI_HEADERS, records),
   });
   return res.json();
 };
 
-/**
- * 從 GAS 讀取 SN 資料
- */
 export const fetchSNData = async (): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('VITE_GAS_URL 未設定');
   const res  = await fetch(`${GAS_URL}?type=sn`);
@@ -45,9 +50,6 @@ export const fetchSNData = async (): Promise<RawSnData[]> => {
   return json.data as RawSnData[];
 };
 
-/**
- * 從 GAS 讀取 IRI 資料
- */
 export const fetchIRIData = async (): Promise<RawIriData[]> => {
   if (!GAS_URL) throw new Error('VITE_GAS_URL 未設定');
   const res  = await fetch(`${GAS_URL}?type=iri`);
