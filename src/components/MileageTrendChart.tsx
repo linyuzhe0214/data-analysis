@@ -42,7 +42,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
     const filtered = data.filter(d => 
       d.route === route && 
       d.direction === direction &&
-      (!lane || d.lane === lane)
+      (!lane || d.lane === lane) &&
+      (type === 'iri' ? d.iri > 0 : d.sn > 0)
     );
     
     const byMileage: Record<number, any> = {};

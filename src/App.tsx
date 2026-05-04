@@ -622,23 +622,24 @@ export default function App() {
               )
             )}
 
-            {activeTab === 'iri-map' && (
-              data.length === 0 ? (
+            {activeTab === 'iri-map' && (() => {
+              const iriData = data.filter(d => d.iri > 0);
+              return iriData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
-                  <p className="text-sm">請上傳歷史 CSV 資料以顯示 IRI 色塊圖</p>
+                  <p className="text-sm">目前上傳的資料中沒有 IRI 檢測值，請上傳 IRI 歷史資料。</p>
                 </div>
               ) : (
               <div className="space-y-6">
                 {availableDirections.map(dir => (
                   <ColorMap 
                     key={dir}
-                    data={data.filter(d => d.route === selectedRoute && d.direction === dir && d.year === selectedYear)} 
+                    data={iriData.filter(d => d.route === selectedRoute && d.direction === dir && d.year === selectedYear)} 
                     title={`${selectedYear}年 ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
                   />
                 ))}
               </div>
-              )
-            )}
+              );
+            })()}
 
 
           </div>

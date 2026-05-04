@@ -490,16 +490,12 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
                 if (/^[NSEWnsew]\d+$/.test(laneVal)) {
                    const parsedLane = parseLaneCode(laneVal);
-                   // 如果是 SN 報表，強制將車道統一為「外側車道」不分車道
-                   laneVal = type === 'sn' ? '外側車道' : parsedLane.lane;
+                   laneVal = parsedLane.lane;
                    
                    // 如果是 SN 報表，我們一律以「車道代碼」(W2/E3) 解析出來的方向為主，無視錯誤的方向對應
                    if (type === 'sn' || (!dirRaw && !sheetGlobalDirection)) {
                        directionVal = parsedLane.direction;
                    }
-                } else if (type === 'sn') {
-                   // 即使不是代碼，SN 報表也一律歸類為外側車道
-                   laneVal = '外側車道';
                 }
 
               if (type === 'iri') {
