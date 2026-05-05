@@ -520,7 +520,7 @@ export default function App() {
       iriDate: selectedIriDate,
       snDate: selectedSnDate
     };
-  }, [data, selectedRoute, selectedDirection, selectedIriDate, selectedSnDate, activeTab]);
+  }, [data, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate, activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
