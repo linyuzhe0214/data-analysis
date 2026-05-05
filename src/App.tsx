@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
-import { Upload, FileDown, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database } from 'lucide-react';
+import { Upload, FileDown, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
 import { PavementData } from './types';
 import { generateMockData } from './data/mockData';
 import { MileageTrendChart } from './components/MileageTrendChart';
@@ -31,6 +31,16 @@ function loadFromLocalStorage(): PavementData[] {
   }
 }
 
+export const normalizeLane = (lane: string | undefined): string => {
+  if (!lane) return '外側車道';
+  return String(lane)
+    .replace('第1車道', '第一車道')
+    .replace('第2車道', '第二車道')
+    .replace('第3車道', '第三車道')
+    .replace('第4車道', '第四車道')
+    .replace('第5車道', '第五車道');
+};
+
 export default function App() {
   const [rawData, setRawData] = useState<PavementData[]>(loadFromLocalStorage);
 
@@ -44,10 +54,12 @@ export default function App() {
 
   const data = useMemo(() => {
     return rawData.map(d => {
-      if (d.route.includes('4') && ['第二車道', '第三車道', '第2車道', '第3車道'].includes(d.lane)) {
+      let lane = normalizeLane(d.lane);
+                 
+      if (d.route.includes('4') && ['第二車道', '第三車道'].includes(lane)) {
         return { ...d, lane: '第2及第3車道' };
       }
-      return d;
+      return { ...d, lane };
     });
   }, [rawData]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
@@ -88,7 +100,7 @@ export default function App() {
             year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
-            lane: p.lane || '外側車道',
+            lane: normalizeLane(p.lane),
             mileage: parseMileageToNumber(p.mileage),
             iri: 0,
             sn: p.sn ? Number(p.sn) : 0
@@ -100,7 +112,7 @@ export default function App() {
             year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
-            lane: p.lane || '外側車道',
+            lane: normalizeLane(p.lane),
             mileage: parseMileageToNumber(p.mileage),
             iri: p.avgIri ? Number(p.avgIri) : 0,
             sn: 0
@@ -144,10 +156,16 @@ export default function App() {
 
   const availableLanes = useMemo(() => {
     const dataLanes = Array.from(new Set(data.filter(d => d.route === selectedRoute && d.direction === selectedDirection).map(d => d.lane))).filter(Boolean) as string[];
-    const laneOrder = ['內側車道', '中線車道', '外側車道'];
+    const laneOrder = [
+      '內側車道', '第一車道', 
+      '中線車道', '第二車道', '第2及第3車道',
+      '外側車道', '第三車道', 
+      '第四車道', '第五車道'
+    ];
     return dataLanes.sort((a, b) => {
       const idxA = laneOrder.indexOf(a);
       const idxB = laneOrder.indexOf(b);
+      if (idxA === -1 && idxB === -1) return a.localeCompare(b);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
     });
   }, [selectedRoute, selectedDirection, data]);
@@ -188,7 +206,7 @@ export default function App() {
             year: Number(row.year),
             route: String(row.route),
             direction: String(row.direction),
-            lane: row.lane ? String(row.lane) : '外側車道',
+            lane: normalizeLane(row.lane),
             mileage: Number(row.mileage),
             iri: Number(row.iri),
             sn: Number(row.sn)
@@ -271,7 +289,7 @@ export default function App() {
         year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
         route: p.route || '未知路線',
         direction: p.direction || '未知方向',
-        lane: p.lane || '外側車道',
+        lane: normalizeLane(p.lane),
         mileage: parseMileageToNumber(p.mileage),
         iri: p.avgIri ? Number(p.avgIri) : 0,
         sn: p.sn ? Number(p.sn) : 0
@@ -498,55 +516,79 @@ export default function App() {
         ) : (
           <div className="space-y-6">
             {/* Filters */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-slate-600">路線:</label>
-                <select 
-                  value={selectedRoute} 
-                  onChange={(e) => setSelectedRoute(e.target.value)}
-                  className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  {routes.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
+                  <Filter className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">資料篩選條件</h3>
               </div>
-              
-              {activeTab === 'trends' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-slate-600">方向:</label>
-                    <select 
-                      value={selectedDirection} 
-                      onChange={(e) => setSelectedDirection(e.target.value)}
-                      className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    >
-                      {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-slate-600">車道:</label>
-                    <select 
-                      value={selectedLane} 
-                      onChange={(e) => setSelectedLane(e.target.value)}
-                      className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    >
-                      {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              {(activeTab === 'iri-map' || activeTab === 'trends') && (
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-600">年度 (統計與色塊圖):</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 路線 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Map className="w-3.5 h-3.5 text-slate-400" /> 路線
+                  </label>
                   <select 
-                    value={selectedYear} 
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                    className="border border-slate-300 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    value={selectedRoute} 
+                    onChange={(e) => setSelectedRoute(e.target.value)}
+                    className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
+                    style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
                   >
-                    {years.map(y => <option key={y} value={y}>{y} 年</option>)}
+                    {routes.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
-              )}
+                
+                {activeTab === 'trends' && (
+                  <>
+                    {/* 方向 */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                        <Compass className="w-3.5 h-3.5 text-slate-400" /> 方向
+                      </label>
+                      <select 
+                        value={selectedDirection} 
+                        onChange={(e) => setSelectedDirection(e.target.value)}
+                        className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
+                        style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+                      >
+                        {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+
+                    {/* 車道 */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                        <Layers className="w-3.5 h-3.5 text-slate-400" /> 車道
+                      </label>
+                      <select 
+                        value={selectedLane} 
+                        onChange={(e) => setSelectedLane(e.target.value)}
+                        className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
+                        style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+                      >
+                        {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {(activeTab === 'iri-map' || activeTab === 'trends') && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 年度 {activeTab === 'iri-map' ? '(色塊圖)' : '(統計)'}
+                    </label>
+                    <select 
+                      value={selectedYear} 
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
+                      style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+                    >
+                      {years.map(y => <option key={y} value={y}>{y} 年</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 上傳結果列表 */}
