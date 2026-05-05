@@ -9,6 +9,7 @@ export interface RawIriData {
   lane: string;      // 第X車道
   avgIri: number;
   avgPrqi: number;
+  batchName: string;
 }
 
 export interface RawSnData {
@@ -18,6 +19,7 @@ export interface RawSnData {
   direction: string; // 北上/南下/東向/西向
   lane: string;      // 第X車道
   sn: number;
+  batchName: string;
 }
 
 // ─── 工具函式 ────────────────────────────────────────────────
@@ -364,6 +366,7 @@ export interface MappingRule {
     route?: string;
     direction?: string;
     lane?: string;
+    batchName?: string;
   };
 }
 
@@ -486,6 +489,12 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 let dirRaw = getCellStr(normalizedCols.direction) || sheetGlobalDirection || '';
                 let directionVal = resolveDirection(dirRaw, routeVal);
                 let laneVal = getCellStr(normalizedCols.lane) || sheetGlobalLane || '';
+                let batchNameVal = rule.globals.batchName || '';
+
+                if (!batchNameVal) {
+                  // Fallback to Year-Month if no batch name is provided
+                  batchNameVal = dateVal ? dateVal.slice(0, 7) : '未分類';
+                }
 
                 // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
                 if (/^[NSEWnsew]\d+$/.test(laneVal)) {
@@ -510,7 +519,8 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                     direction: directionVal,
                     lane: laneVal,
                     avgIri: Number(iriRaw),
-                    avgPrqi: Number(prqiRaw) || 0
+                    avgPrqi: Number(prqiRaw) || 0,
+                    batchName: batchNameVal
                   });
                 }
               } else if (type === 'sn') {
@@ -522,7 +532,8 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                     route: routeVal,
                     direction: directionVal,
                     lane: laneVal,
-                    sn: Number(snRaw)
+                    sn: Number(snRaw),
+                    batchName: batchNameVal
                   });
                 }
               }
