@@ -98,6 +98,8 @@ export default function App() {
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedIriDate, setSelectedIriDate] = useState<string>('');
+  const [selectedSnDate, setSelectedSnDate] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -251,12 +253,42 @@ export default function App() {
     [data, selectedRoute, selectedDirection]
   );
 
+  const availableIriDatesByRoute = useMemo(() =>
+    Array.from(new Set(
+      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection && d.iri > 0).map(d => d.date)
+    )).sort((a, b) => b.localeCompare(a)),
+    [data, selectedRoute, selectedDirection]
+  );
+
+  const availableSnDatesByRoute = useMemo(() =>
+    Array.from(new Set(
+      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection && d.sn > 0).map(d => d.date)
+    )).sort((a, b) => b.localeCompare(a)),
+    [data, selectedRoute, selectedDirection]
+  );
+
   useEffect(() => {
     if (data.length > 0) {
       if (!selectedRoute || !routes.includes(selectedRoute)) setSelectedRoute(routes[0]);
       if (!selectedDate || !availableDates.includes(selectedDate)) setSelectedDate(availableDates[0]);
     }
   }, [data, routes, availableDates]);
+
+  useEffect(() => {
+    if (availableIriDatesByRoute.length > 0) {
+      if (!selectedIriDate || !availableIriDatesByRoute.includes(selectedIriDate)) {
+        setSelectedIriDate(availableIriDatesByRoute[0]);
+      }
+    }
+  }, [availableIriDatesByRoute]);
+
+  useEffect(() => {
+    if (availableSnDatesByRoute.length > 0) {
+      if (!selectedSnDate || !availableSnDatesByRoute.includes(selectedSnDate)) {
+        setSelectedSnDate(availableSnDatesByRoute[0]);
+      }
+    }
+  }, [availableSnDatesByRoute]);
 
   useEffect(() => {
     if (availableDirections.length > 0 && !availableDirections.includes(selectedDirection)) {
@@ -446,16 +478,11 @@ export default function App() {
 
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
-    // 統計筛選路線 + 方向 + 日期，不筛車道
-    const statsData = data.filter(d =>
-      d.route === selectedRoute &&
-      d.direction === selectedDirection &&
-      d.date === selectedDate
-    );
-    if (statsData.length === 0) return null;
-
-    const iriData = statsData.filter(d => d.iri > 0);
-    const snData = statsData.filter(d => d.sn > 0);
+    
+    const routeData = data.filter(d => d.route === selectedRoute && d.direction === selectedDirection);
+    
+    const iriData = selectedIriDate ? routeData.filter(d => d.date === selectedIriDate && d.iri > 0) : [];
+    const snData = selectedSnDate ? routeData.filter(d => d.date === selectedSnDate && d.sn > 0) : [];
 
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
     const avgSn = snData.length > 0 ? snData.reduce((acc, curr) => acc + curr.sn, 0) / snData.length : 0;
@@ -466,7 +493,8 @@ export default function App() {
 
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
-    const mileages: number[] = Array.from(new Set<number>(statsData.map(d => d.mileage)));
+    const allStatsData = [...iriData, ...snData];
+    const mileages: number[] = Array.from(new Set<number>(allStatsData.map(d => d.mileage)));
     const totalLength = mileages.length > 0 ? Math.max(...mileages) - Math.min(...mileages) : 0;
 
     return {
@@ -476,9 +504,11 @@ export default function App() {
       pct20: pct20.toFixed(1),
       pct25: pct25.toFixed(1),
       countSn35,
-      totalLength: totalLength.toFixed(1)
+      totalLength: totalLength.toFixed(1),
+      iriDate: selectedIriDate,
+      snDate: selectedSnDate
     };
-  }, [data, selectedRoute, selectedDirection, selectedDate, activeTab]);
+  }, [data, selectedRoute, selectedDirection, selectedIriDate, selectedSnDate, activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -638,21 +668,7 @@ export default function App() {
                   </>
                 )}
 
-                {activeTab === 'iri-map' && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 檢測日期 (色塊圖)
-                    </label>
-                    <select 
-                      value={selectedDate} 
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
-                      style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
-                    >
-                      {availableDates.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                )}
+
               </div>
             </div>
 
@@ -761,18 +777,49 @@ export default function App() {
                 <div className="space-y-6">
                   {stats && (
                     <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mr-2">
                           <Activity className="w-4 h-4 text-blue-600" />
-                          檢測統計
+                          統計比較週期設定
                         </h4>
-                        <select
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                          className="border border-slate-300 bg-white rounded py-1 px-2 text-sm font-medium text-slate-700 outline-none cursor-pointer"
-                        >
-                          {availableStatsDates.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
+                        
+                        {/* IRI 日期選單 */}
+                        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-blue-100 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold">IRI</span>
+                            <span className="text-xs font-bold text-slate-600">檢測日期</span>
+                          </div>
+                          <select
+                            value={selectedIriDate}
+                            onChange={(e) => setSelectedIriDate(e.target.value)}
+                            className="border border-slate-200 bg-slate-50 rounded-lg py-1 px-3 text-xs font-bold text-blue-700 outline-none cursor-pointer hover:border-blue-400 transition-colors"
+                          >
+                            {availableIriDatesByRoute.length > 0 ? (
+                              availableIriDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
+                            ) : (
+                              <option value="">無檢測資料</option>
+                            )}
+                          </select>
+                        </div>
+
+                        {/* SN 日期選單 */}
+                        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-purple-100 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold">SN</span>
+                            <span className="text-xs font-bold text-slate-600">檢測日期</span>
+                          </div>
+                          <select
+                            value={selectedSnDate}
+                            onChange={(e) => setSelectedSnDate(e.target.value)}
+                            className="border border-slate-200 bg-slate-50 rounded-lg py-1 px-3 text-xs font-bold text-purple-700 outline-none cursor-pointer hover:border-purple-400 transition-colors"
+                          >
+                            {availableSnDatesByRoute.length > 0 ? (
+                              availableSnDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
+                            ) : (
+                              <option value="">無檢測資料</option>
+                            )}
+                          </select>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
@@ -781,6 +828,7 @@ export default function App() {
                             <span className="text-xs font-medium">平均 IRI</span>
                           </div>
                           <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
+                          {stats.iriDate && <span className="text-[10px] text-slate-400 mt-1">{stats.iriDate} 檢測</span>}
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-purple-600">
@@ -788,6 +836,7 @@ export default function App() {
                             <span className="text-xs font-medium">平均 SN</span>
                           </div>
                           <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
+                          {stats.snDate && <span className="text-[10px] text-slate-400 mt-1">{stats.snDate} 檢測</span>}
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-yellow-600">
