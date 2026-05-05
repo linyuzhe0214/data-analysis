@@ -257,14 +257,22 @@ export default function App() {
 
   const availableIriDatesByRoute = useMemo(() =>
     Array.from(new Set(
-      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection && d.iri > 0).map(d => d.date)
+      data.filter(d => 
+        d.route === selectedRoute && 
+        (selectedDirection === '雙向' || d.direction === selectedDirection) && 
+        d.iri > 0
+      ).map(d => d.date)
     )).sort((a, b) => b.localeCompare(a)),
     [data, selectedRoute, selectedDirection]
   );
 
   const availableSnDatesByRoute = useMemo(() =>
     Array.from(new Set(
-      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection && d.sn > 0).map(d => d.date)
+      data.filter(d => 
+        d.route === selectedRoute && 
+        (selectedDirection === '雙向' || d.direction === selectedDirection) && 
+        d.sn > 0
+      ).map(d => d.date)
     )).sort((a, b) => b.localeCompare(a)),
     [data, selectedRoute, selectedDirection]
   );
