@@ -104,92 +104,94 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
 
+  // 從雲端資料庫同步（可手動觸發）
+  const syncFromDB = async () => {
+    if (!GAS_URL) return;
+    setIsSyncing(true);
+    try {
+      const [snRaw, iriRaw] = await Promise.all([
+        fetchSNData().catch(() => [] as any[]),
+        fetchIRIData().catch(() => [] as any[])
+      ]);
+      
+      const normalizeDateStr = (raw: any): string => {
+        if (!raw) return new Date().toISOString().split('T')[0];
+        let s = String(raw).trim();
+        if (s.includes('T') && s.endsWith('Z')) {
+           const d = new Date(s);
+           if (!isNaN(d.getTime())) {
+               const y = d.getFullYear();
+               const m = String(d.getMonth() + 1).padStart(2, '0');
+               const day = String(d.getDate()).padStart(2, '0');
+               s = `${y}-${m}-${day}`;
+           } else {
+               s = s.split('T')[0];
+           }
+        } else if (s.includes('T')) {
+            s = s.split('T')[0];
+        }
+        if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+        s = s.replace(/[\/\.]/g, '-');
+        const parts = s.split('-');
+        if (parts.length === 3) {
+            parts[1] = parts[1].padStart(2, '0');
+            parts[2] = parts[2].padStart(2, '0');
+            s = parts.join('-');
+        }
+        return s;
+      };
+      
+      const parseMileageToNumber = (raw: any): number => {
+        if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
+        const str = String(raw || '');
+        const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
+        if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
+      };
+
+      const newPavementData: PavementData[] = [];
+
+      snRaw.forEach(p => {
+        newPavementData.push({
+          date: normalizeDateStr(p.date),
+          route: p.route || '未知路線',
+          direction: p.direction || '未知方向',
+          lane: normalizeLane(p.lane),
+          mileage: parseMileageToNumber(p.mileage),
+          iri: 0,
+          sn: p.sn ? Number(p.sn) : 0,
+          prqi: 0
+        });
+      });
+
+      iriRaw.forEach(p => {
+        newPavementData.push({
+          date: normalizeDateStr(p.date),
+          route: p.route || '未知路線',
+          direction: p.direction || '未知方向',
+          lane: normalizeLane(p.lane),
+          mileage: parseMileageToNumber(p.mileage),
+          iri: p.avgIri ? Number(p.avgIri) : 0,
+          sn: 0,
+          prqi: p.avgPrqi ? Number(p.avgPrqi) : 0
+        });
+      });
+
+      if (newPavementData.length > 0) {
+        // 強制清除舊快取，用資料庫資料完全覆寫
+        localStorage.removeItem(LS_KEY);
+        setDataPersist(newPavementData);
+      }
+    } catch (e) {
+      console.error('Failed to auto-sync from DB:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // 網頁載入時自動從雲端資料庫同步
   useEffect(() => {
-    if (!GAS_URL) return;
-    
-    const syncFromDB = async () => {
-      setIsSyncing(true);
-      try {
-        const [snRaw, iriRaw] = await Promise.all([
-          fetchSNData().catch(() => [] as any[]),
-          fetchIRIData().catch(() => [] as any[])
-        ]);
-        
-        const normalizeDateStr = (raw: any): string => {
-          if (!raw) return new Date().toISOString().split('T')[0];
-          let s = String(raw).trim();
-          if (s.includes('T') && s.endsWith('Z')) {
-             const d = new Date(s);
-             if (!isNaN(d.getTime())) {
-                 const y = d.getFullYear();
-                 const m = String(d.getMonth() + 1).padStart(2, '0');
-                 const day = String(d.getDate()).padStart(2, '0');
-                 s = `${y}-${m}-${day}`;
-             } else {
-                 s = s.split('T')[0];
-             }
-          } else if (s.includes('T')) {
-              s = s.split('T')[0];
-          }
-          if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-          s = s.replace(/[\/\.]/g, '-');
-          const parts = s.split('-');
-          if (parts.length === 3) {
-              parts[1] = parts[1].padStart(2, '0');
-              parts[2] = parts[2].padStart(2, '0');
-              s = parts.join('-');
-          }
-          return s;
-        };
-        
-        const parseMileageToNumber = (raw: any): number => {
-          if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
-          const str = String(raw || '');
-          const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
-          if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
-          const num = parseFloat(str);
-          return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
-        };
-
-        const newPavementData: PavementData[] = [];
-
-        snRaw.forEach(p => {
-          newPavementData.push({
-            date: normalizeDateStr(p.date),
-            route: p.route || '未知路線',
-            direction: p.direction || '未知方向',
-            lane: normalizeLane(p.lane),
-            mileage: parseMileageToNumber(p.mileage),
-            iri: 0,
-            sn: p.sn ? Number(p.sn) : 0,
-            prqi: 0
-          });
-        });
-
-        iriRaw.forEach(p => {
-          newPavementData.push({
-            date: normalizeDateStr(p.date),
-            route: p.route || '未知路線',
-            direction: p.direction || '未知方向',
-            lane: normalizeLane(p.lane),
-            mileage: parseMileageToNumber(p.mileage),
-            iri: p.avgIri ? Number(p.avgIri) : 0,
-            sn: 0,
-            prqi: p.avgPrqi ? Number(p.avgPrqi) : 0
-          });
-        });
-
-        if (newPavementData.length > 0) {
-          setDataPersist(newPavementData);
-        }
-      } catch (e) {
-        console.error('Failed to auto-sync from DB:', e);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-    
     syncFromDB();
   }, []);
 
@@ -390,7 +392,6 @@ export default function App() {
         ));
 
       } else {
-        // ── 沒有 GAS：僅本地 ──
         setUploadResults(prev => prev.map(r =>
           (r.type === type && r.status === 'idle')
             ? { ...r, status: 'done', inserted: r.parsed, message: '已寫入本地資料庫' }
@@ -407,10 +408,20 @@ export default function App() {
     setDataPersist([]);
   };
 
+  // 色塊圖：依路線 + 方向 + 日期筛選（不筛車道，顯示所有車道）
+  const colorMapData = useMemo(() => {
+    return data.filter(d =>
+      d.route === selectedRoute &&
+      d.direction === selectedDirection &&
+      d.date === selectedDate
+    );
+  }, [data, selectedRoute, selectedDirection, selectedDate]);
+
+  // 趣勢圖用（保留車道筛選）
   const currentViewData = useMemo(() => {
-    return data.filter(d => 
-      d.route === selectedRoute && 
-      d.direction === selectedDirection && 
+    return data.filter(d =>
+      d.route === selectedRoute &&
+      d.direction === selectedDirection &&
       d.date === selectedDate &&
       (!selectedLane || d.lane === selectedLane)
     );
@@ -418,20 +429,24 @@ export default function App() {
 
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
-    const statsData = currentViewData;
+    // 統計不筛車道，統計該日期該路線該方向的所有車道資料
+    const statsData = data.filter(d =>
+      d.route === selectedRoute &&
+      d.direction === selectedDirection &&
+      d.date === selectedDate
+    );
     if (statsData.length === 0) return null;
-    
+
     const iriData = statsData.filter(d => d.iri > 0);
     const snData = statsData.filter(d => d.sn > 0);
 
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
     const avgSn = snData.length > 0 ? snData.reduce((acc, curr) => acc + curr.sn, 0) / snData.length : 0;
-    
+
     const pct175 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 1.75).length / iriData.length * 100) : 0;
     const pct20 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.0).length / iriData.length * 100) : 0;
     const pct25 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.5).length / iriData.length * 100) : 0;
-    
-    // SN 統計：<35 的筆數 (處)
+
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
     const mileages: number[] = Array.from(new Set<number>(statsData.map(d => d.mileage)));
@@ -446,7 +461,7 @@ export default function App() {
       countSn35,
       totalLength: totalLength.toFixed(1)
     };
-  }, [currentViewData, activeTab]);
+  }, [data, selectedRoute, selectedDirection, selectedDate, activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -495,6 +510,17 @@ export default function App() {
                 <Loader2 className="w-4 h-4 animate-spin" />
                 處理中...
               </span>
+            )}
+            {GAS_URL && (
+              <button
+                onClick={syncFromDB}
+                disabled={isSyncing}
+                className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                title="從資料庫重新同步（清除本地快取）"
+              >
+                <Loader2 className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? '同步中...' : '重新同步'}
+              </button>
             )}
             <button 
               onClick={() => iriFileInputRef.current?.click()}
@@ -792,17 +818,17 @@ export default function App() {
             )}
 
             {activeTab === 'iri-map' && (() => {
-              const iriData = data.filter(d => d.iri > 0);
+              const iriData = colorMapData.filter(d => d.iri > 0);
               return iriData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
-                  <p className="text-sm">目前上傳的資料中沒有 IRI 檢測值，請上傳 IRI 歷史資料。</p>
+                  <p className="text-sm">所選日期 ({selectedDate}) 無 IRI 資料，請確認資料庫日期格式是否一致。</p>
                 </div>
               ) : (
               <div className="space-y-6">
                 {availableDirections.map(dir => (
                   <ColorMap 
                     key={dir}
-                    data={iriData.filter(d => d.route === selectedRoute && d.direction === dir && d.date === selectedDate)} 
+                    data={iriData.filter(d => d.direction === dir)} 
                     title={`${selectedDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
                   />
                 ))}
