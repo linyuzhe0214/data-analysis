@@ -215,7 +215,8 @@ export default function App() {
     
     // 如果資料中有方向就回傳，都沒有的話才回傳預設的避免畫面出錯
     const result = [...validPredefined, ...others];
-    return result.length > 0 ? result : predefined;
+    const finalDirs = result.length > 0 ? result : predefined;
+    return ['雙向', ...finalDirs];
   }, [selectedRoute, data]);
 
   const availableLanes = useMemo(() => {
@@ -292,8 +293,10 @@ export default function App() {
   }, [availableSnDatesByRoute]);
 
   useEffect(() => {
-    if (availableDirections.length > 0 && !availableDirections.includes(selectedDirection)) {
-      setSelectedDirection(availableDirections[0]);
+    if (availableDirections.length > 0) {
+      if (!selectedDirection || !availableDirections.includes(selectedDirection)) {
+        setSelectedDirection('雙向');
+      }
     }
   }, [availableDirections, selectedDirection]);
 
@@ -473,7 +476,7 @@ export default function App() {
   const currentViewData = useMemo(() => {
     return data.filter(d =>
       d.route === selectedRoute &&
-      d.direction === selectedDirection &&
+      (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection) &&
       d.date === selectedDate &&
       (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
     );
@@ -482,7 +485,10 @@ export default function App() {
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
     
-    const routeData = data.filter(d => d.route === selectedRoute && d.direction === selectedDirection);
+    const routeData = data.filter(d => 
+      d.route === selectedRoute && 
+      (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection)
+    );
     
     const iriData = selectedIriDate ? routeData.filter(d => 
       d.date === selectedIriDate && 
