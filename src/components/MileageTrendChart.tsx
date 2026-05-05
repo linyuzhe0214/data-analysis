@@ -54,7 +54,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
         byMileage[d.mileage] = { mileage: d.mileage };
       }
       
-      const dataKey = d.year.toString();
+      const dataKey = d.date;
 
       if (!byMileage[d.mileage][dataKey]) {
         byMileage[d.mileage][dataKey] = { sum: 0, count: 0 };
@@ -144,7 +144,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 key={key}
                 type="monotone" 
                 dataKey={key} 
-                name={`${key}年`} 
+                name={`${key}`} 
                 stroke={COLORS[index % COLORS.length]} 
                 strokeWidth={2}
                 dot={false}

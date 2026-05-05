@@ -1,5 +1,5 @@
 export interface PavementData {
-  year: number;
+  date: string;
   route: string;
   direction: string;
   lane: string;

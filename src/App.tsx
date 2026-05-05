@@ -63,7 +63,7 @@ export default function App() {
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number | ''>('');
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -95,7 +95,7 @@ export default function App() {
 
         snRaw.forEach(p => {
           newPavementData.push({
-            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+            date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
             lane: normalizeLane(p.lane),
@@ -108,7 +108,7 @@ export default function App() {
 
         iriRaw.forEach(p => {
           newPavementData.push({
-            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+            date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
             lane: normalizeLane(p.lane),
@@ -169,14 +169,14 @@ export default function App() {
     });
   }, [selectedRoute, selectedDirection, data]);
 
-  const years = useMemo(() => Array.from(new Set(data.map(d => d.year))).sort((a: number, b: number) => b - a), [data]);
+  const availableDates = useMemo(() => Array.from(new Set(data.map(d => d.date))).sort((a, b) => b.localeCompare(a)), [data]);
 
   useEffect(() => {
     if (data.length > 0) {
       if (!selectedRoute || !routes.includes(selectedRoute)) setSelectedRoute(routes[0]);
-      if (!selectedYear || !years.includes(selectedYear)) setSelectedYear(years[0]);
+      if (!selectedDate || !availableDates.includes(selectedDate)) setSelectedDate(availableDates[0]);
     }
-  }, [data, routes, years]);
+  }, [data, routes, availableDates]);
 
   useEffect(() => {
     if (availableDirections.length > 0 && !availableDirections.includes(selectedDirection)) {
@@ -251,7 +251,7 @@ export default function App() {
 
       // 無論有沒有 GAS，先把資料更新到本地儀表板
       const mappedToPavementData = allParsed.map(p => ({
-        year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+        date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
         route: p.route || '未知路線',
         direction: p.direction || '未知方向',
         lane: normalizeLane(p.lane),
@@ -323,10 +323,10 @@ export default function App() {
     return data.filter(d => 
       d.route === selectedRoute && 
       d.direction === selectedDirection && 
-      d.year === selectedYear &&
+      d.date === selectedDate &&
       (!selectedLane || d.lane === selectedLane)
     );
-  }, [data, selectedRoute, selectedDirection, selectedYear, selectedLane]);
+  }, [data, selectedRoute, selectedDirection, selectedDate, selectedLane]);
 
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
@@ -510,15 +510,15 @@ export default function App() {
                 {(activeTab === 'iri-map' || activeTab === 'trends') && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 年度 {activeTab === 'iri-map' ? '(色塊圖)' : '(統計)'}
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 檢測日期 {activeTab === 'iri-map' ? '(色塊圖)' : '(統計)'}
                     </label>
                     <select 
-                      value={selectedYear} 
-                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      value={selectedDate} 
+                      onChange={(e) => setSelectedDate(e.target.value)}
                       className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
                       style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
                     >
-                      {years.map(y => <option key={y} value={y}>{y} 年</option>)}
+                      {availableDates.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
                 )}
@@ -699,8 +699,8 @@ export default function App() {
                 {availableDirections.map(dir => (
                   <ColorMap 
                     key={dir}
-                    data={iriData.filter(d => d.route === selectedRoute && d.direction === dir && d.year === selectedYear)} 
-                    title={`${selectedYear}年 ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
+                    data={iriData.filter(d => d.route === selectedRoute && d.direction === dir && d.date === selectedDate)} 
+                    title={`${selectedDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
                   />
                 ))}
               </div>
