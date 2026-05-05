@@ -215,7 +215,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
               </p>
               
               <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <GlobalSelect label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} />
+                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="例如: 2024-05-01" showAutoDetect />
                 <GlobalSelect label="預設路線" value={rule.globals.route} onChange={(v) => handleGlobalChange('route', v)} />
                 {type === 'iri' && <GlobalSelect label="預設方向" value={rule.globals.direction} onChange={(v) => handleGlobalChange('direction', v)} />}
                 <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />
@@ -395,16 +395,34 @@ const FieldSelect = ({ label, value, options, onChange, required }: { label: str
   </div>
 );
 
-const GlobalInput = ({ label, value, onChange, placeholder }: { label: string, value?: string, onChange: (v: string) => void, placeholder?: string }) => (
+const GlobalInput = ({ label, value, onChange, placeholder, showAutoDetect }: { label: string, value?: string, onChange: (v: string) => void, placeholder?: string, showAutoDetect?: boolean }) => (
   <div className="flex items-center gap-3">
     <label className="w-20 shrink-0 text-sm font-medium text-slate-700 text-right">{label} :</label>
-    <input 
-      type="text"
-      value={value || ''}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="flex-1 border border-slate-300 bg-slate-50 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-    />
+    <div className="flex-1 flex items-center gap-2">
+      <input 
+        type="text"
+        value={value === '__SHEET_NAME__' ? '✨ 從工作表自動擷取' : (value || '')}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`flex-1 border rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${value === '__SHEET_NAME__' ? 'bg-blue-50 text-blue-700 font-medium border-blue-200' : 'bg-slate-50 border-slate-300'}`}
+      />
+      {showAutoDetect && value !== '__SHEET_NAME__' && (
+        <button 
+          onClick={() => onChange('__SHEET_NAME__')}
+          className="shrink-0 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+        >
+          ✨ 自動擷取
+        </button>
+      )}
+      {showAutoDetect && value === '__SHEET_NAME__' && (
+        <button 
+          onClick={() => onChange('')}
+          className="shrink-0 px-3 py-1.5 text-xs font-medium bg-slate-100 text-slate-600 rounded border border-slate-200 hover:bg-slate-200 transition-colors"
+        >
+          手動輸入
+        </button>
+      )}
+    </div>
   </div>
 );
 
@@ -419,7 +437,6 @@ const GlobalSelect = ({ label, value, onChange }: { label: string, value?: strin
       <option value="">-- 不指定預設值 --</option>
       <option value="__SHEET_NAME__">✨ 從工作表名稱自動擷取</option>
       <option disabled>──────────</option>
-      {label.includes('日期') && <option value={new Date().toISOString().split('T')[0]}>今日 ({new Date().toISOString().split('T')[0]})</option>}
       {label.includes('路線') && ['國道1號', '國道3號', '國道4號', '國道5號', '國道6號', '國道10號'].map(o => <option key={o} value={o}>{o}</option>)}
       {label.includes('方向') && ['北上', '南下', '東向', '西向'].map(o => <option key={o} value={o}>{o}</option>)}
       {label.includes('車道') && ['內側車道', '中線車道', '外側車道', '第一車道', '第二車道', '第三車道', '第四車道'].map(o => <option key={o} value={o}>{o}</option>)}
