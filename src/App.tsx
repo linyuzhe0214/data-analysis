@@ -226,12 +226,13 @@ export default function App() {
       '外側車道', '第三車道', 
       '第四車道', '第五車道'
     ];
-    return dataLanes.sort((a, b) => {
+    const sorted = dataLanes.sort((a, b) => {
       const idxA = laneOrder.indexOf(a);
       const idxB = laneOrder.indexOf(b);
       if (idxA === -1 && idxB === -1) return a.localeCompare(b);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
     });
+    return ['全車道', ...sorted];
   }, [selectedRoute, selectedDirection, data]);
 
   // 所有日期（全部資料）
@@ -297,8 +298,10 @@ export default function App() {
   }, [availableDirections, selectedDirection]);
 
   useEffect(() => {
-    if (availableLanes.length > 0 && !availableLanes.includes(selectedLane)) {
-      setSelectedLane(availableLanes[0]);
+    if (availableLanes.length > 0) {
+      if (!selectedLane || !availableLanes.includes(selectedLane)) {
+        setSelectedLane('全車道');
+      }
     }
   }, [availableLanes, selectedLane]);
 
@@ -472,7 +475,7 @@ export default function App() {
       d.route === selectedRoute &&
       d.direction === selectedDirection &&
       d.date === selectedDate &&
-      (!selectedLane || d.lane === selectedLane)
+      (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
     );
   }, [data, selectedRoute, selectedDirection, selectedDate, selectedLane]);
 
@@ -484,13 +487,13 @@ export default function App() {
     const iriData = selectedIriDate ? routeData.filter(d => 
       d.date === selectedIriDate && 
       d.iri > 0 && 
-      (!selectedLane || d.lane === selectedLane)
+      (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
     ) : [];
     
     const snData = selectedSnDate ? routeData.filter(d => 
       d.date === selectedSnDate && 
       d.sn > 0 && 
-      (!selectedLane || d.lane === selectedLane)
+      (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
     ) : [];
 
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
