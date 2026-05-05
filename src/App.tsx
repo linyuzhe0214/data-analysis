@@ -7,7 +7,7 @@ import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
-import { uploadSNData, uploadIRIData, GAS_URL } from './lib/gasService';
+import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, GAS_URL } from './lib/gasService';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 
@@ -57,7 +57,68 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
+
+  // 網頁載入時自動從雲端資料庫同步
+  useEffect(() => {
+    if (!GAS_URL) return;
+    
+    const syncFromDB = async () => {
+      setIsSyncing(true);
+      try {
+        const [snRaw, iriRaw] = await Promise.all([
+          fetchSNData().catch(() => [] as any[]),
+          fetchIRIData().catch(() => [] as any[])
+        ]);
+        
+        const parseMileageToNumber = (raw: any): number => {
+          if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
+          const str = String(raw || '');
+          const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
+          if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
+          const num = parseFloat(str);
+          return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
+        };
+
+        const newPavementData: PavementData[] = [];
+
+        snRaw.forEach(p => {
+          newPavementData.push({
+            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+            route: p.route || '未知路線',
+            direction: p.direction || '未知方向',
+            lane: p.lane || '外側車道',
+            mileage: parseMileageToNumber(p.mileage),
+            iri: 0,
+            sn: p.sn ? Number(p.sn) : 0
+          });
+        });
+
+        iriRaw.forEach(p => {
+          newPavementData.push({
+            year: p.date ? parseInt(p.date.toString().split(/[-/]/)[0], 10) : new Date().getFullYear(),
+            route: p.route || '未知路線',
+            direction: p.direction || '未知方向',
+            lane: p.lane || '外側車道',
+            mileage: parseMileageToNumber(p.mileage),
+            iri: p.avgIri ? Number(p.avgIri) : 0,
+            sn: 0
+          });
+        });
+
+        if (newPavementData.length > 0) {
+          setDataPersist(newPavementData);
+        }
+      } catch (e) {
+        console.error('Failed to auto-sync from DB:', e);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+    
+    syncFromDB();
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iriFileInputRef = useRef<HTMLInputElement>(null);
@@ -334,7 +395,15 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Map className="w-6 h-6 text-blue-600" />
-            <h1 className="text-xl font-bold text-slate-800">高速公路鋪面檢測分析平台</h1>
+            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+              高速公路鋪面檢測分析平台
+              {isSyncing && (
+                <span className="text-xs font-normal text-blue-500 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1 animate-pulse">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  同步最新資料庫中...
+                </span>
+              )}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
             <input 
