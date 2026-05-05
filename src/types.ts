@@ -7,7 +7,6 @@ export interface PavementData {
   iri: number; // International Roughness Index
   sn: number;  // Skid Number
   prqi: number; // Pavement Roughness Quality Index
-  batchName: string; // Grouping inspections that span multiple days
 }
 
 export type IriCondition = 'level1' | 'level2' | 'level3' | 'level4' | 'level5' | 'level6';

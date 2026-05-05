@@ -37,14 +37,14 @@ async function postCsv(url: string, csv: string): Promise<void> {
 
 export const uploadSNData = async (records: RawSnData[]): Promise<UploadResult> => {
   if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
-  const SN_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'sn', 'batchName'];
+  const SN_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
   await postCsv(`${GAS_URL}?type=sn`, toCsv(SN_HEADERS, records));
   return { success: true, inserted: records.length };
 };
 
 export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult> => {
   if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
-  const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi', 'batchName'];
+  const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
   await postCsv(`${GAS_URL}?type=iri`, toCsv(IRI_HEADERS, records));
   return { success: true, inserted: records.length };
 };

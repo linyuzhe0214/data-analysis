@@ -25,8 +25,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
       route: '',
       direction: '',
       lane: '',
-      date: '',
-      batchName: new Date().toISOString().slice(0, 7) + ' 檢測'
+      date: ''
     }
   });
 
@@ -216,8 +215,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
               </p>
               
               <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="例如: 2024-05-01" />
-                <GlobalInput label="檢測批次" value={rule.globals.batchName} onChange={(v) => handleGlobalChange('batchName', v)} placeholder="例如: 114年上半年定期檢測" />
+                <GlobalSelect label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} />
                 <GlobalSelect label="預設路線" value={rule.globals.route} onChange={(v) => handleGlobalChange('route', v)} />
                 {type === 'iri' && <GlobalSelect label="預設方向" value={rule.globals.direction} onChange={(v) => handleGlobalChange('direction', v)} />}
                 <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />
@@ -421,6 +419,7 @@ const GlobalSelect = ({ label, value, onChange }: { label: string, value?: strin
       <option value="">-- 不指定預設值 --</option>
       <option value="__SHEET_NAME__">✨ 從工作表名稱自動擷取</option>
       <option disabled>──────────</option>
+      {label.includes('日期') && <option value={new Date().toISOString().split('T')[0]}>今日 ({new Date().toISOString().split('T')[0]})</option>}
       {label.includes('路線') && ['國道1號', '國道3號', '國道4號', '國道5號', '國道6號', '國道10號'].map(o => <option key={o} value={o}>{o}</option>)}
       {label.includes('方向') && ['北上', '南下', '東向', '西向'].map(o => <option key={o} value={o}>{o}</option>)}
       {label.includes('車道') && ['內側車道', '中線車道', '外側車道', '第一車道', '第二車道', '第三車道', '第四車道'].map(o => <option key={o} value={o}>{o}</option>)}

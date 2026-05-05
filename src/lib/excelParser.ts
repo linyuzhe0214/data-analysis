@@ -9,7 +9,6 @@ export interface RawIriData {
   lane: string;      // 第X車道
   avgIri: number;
   avgPrqi: number;
-  batchName: string;
 }
 
 export interface RawSnData {
@@ -19,7 +18,6 @@ export interface RawSnData {
   direction: string; // 北上/南下/東向/西向
   lane: string;      // 第X車道
   sn: number;
-  batchName: string;
 }
 
 // ─── 工具函式 ────────────────────────────────────────────────
@@ -229,7 +227,6 @@ export const parseSNFile = async (file: File): Promise<RawSnData[]> => {
                   direction,
                   lane,
                   sn: Number(cellC),
-                  batchName: globalDate ? globalDate.slice(0, 7) : '未分類'
                 });
               }
             }
@@ -332,7 +329,6 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
                 lane,
                 avgIri:  Number(avgIriVal),
                 avgPrqi: Number(avgPrqiVal),
-                batchName: date ? date.slice(0, 7) : '未分類'
               });
             }
           }
@@ -368,7 +364,6 @@ export interface MappingRule {
     route?: string;
     direction?: string;
     lane?: string;
-    batchName?: string;
   };
 }
 
@@ -421,6 +416,11 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
             // 如果全域變數設定為 '__SHEET_NAME__'，則自動從 Sheet 名稱解析
             const fallbackFromSheet = parseIriSheetName(sheetName); 
             
+            let sheetGlobalDate = rule.globals.date;
+            if (sheetGlobalDate === '__SHEET_NAME__') {
+              sheetGlobalDate = convertROCDate(sheetName.trim()) || sheetName.trim();
+            }
+
             let sheetGlobalRoute = rule.globals.route;
             if (sheetGlobalRoute === '__SHEET_NAME__') sheetGlobalRoute = fallbackFromSheet.route;
             
@@ -477,7 +477,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 // 處理日期與時間
                 const rawDate = getCellRaw(normalizedCols.date);
                 const dt = normalizeDateTimeValue(rawDate);
-                const dateVal = dt.date || rule.globals.date;
+                const dateVal = dt.date || sheetGlobalDate || '';
                 
                 // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
                 const timeColVal = getCellStr(normalizedCols.time);
@@ -491,12 +491,6 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 let dirRaw = getCellStr(normalizedCols.direction) || sheetGlobalDirection || '';
                 let directionVal = resolveDirection(dirRaw, routeVal);
                 let laneVal = getCellStr(normalizedCols.lane) || sheetGlobalLane || '';
-                let batchNameVal = rule.globals.batchName || '';
-
-                if (!batchNameVal) {
-                  // Fallback to Year-Month if no batch name is provided
-                  batchNameVal = dateVal ? dateVal.slice(0, 7) : '未分類';
-                }
 
                 // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
                 if (/^[NSEWnsew]\d+$/.test(laneVal)) {
@@ -521,8 +515,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                     direction: directionVal,
                     lane: laneVal,
                     avgIri: Number(iriRaw),
-                    avgPrqi: Number(prqiRaw) || 0,
-                    batchName: batchNameVal
+                    avgPrqi: Number(prqiRaw) || 0
                   });
                 }
               } else if (type === 'sn') {
@@ -534,8 +527,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                     route: routeVal,
                     direction: directionVal,
                     lane: laneVal,
-                    sn: Number(snRaw),
-                    batchName: batchNameVal
+                    sn: Number(snRaw)
                   });
                 }
               }

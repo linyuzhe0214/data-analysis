@@ -54,7 +54,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
         byMileage[d.mileage] = { mileage: d.mileage };
       }
       
-      const dataKey = d.batchName;
+      const dataKey = d.date;
 
       if (!byMileage[d.mileage][dataKey]) {
         byMileage[d.mileage][dataKey] = { sum: 0, count: 0 };
