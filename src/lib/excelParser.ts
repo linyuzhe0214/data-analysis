@@ -229,6 +229,7 @@ export const parseSNFile = async (file: File): Promise<RawSnData[]> => {
                   direction,
                   lane,
                   sn: Number(cellC),
+                  batchName: globalDate ? globalDate.slice(0, 7) : '未分類'
                 });
               }
             }
@@ -331,6 +332,7 @@ export const parseIRIFile = async (file: File): Promise<RawIriData[]> => {
                 lane,
                 avgIri:  Number(avgIriVal),
                 avgPrqi: Number(avgPrqiVal),
+                batchName: date ? date.slice(0, 7) : '未分類'
               });
             }
           }
