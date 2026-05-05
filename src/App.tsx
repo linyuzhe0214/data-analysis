@@ -232,7 +232,24 @@ export default function App() {
     });
   }, [selectedRoute, selectedDirection, data]);
 
+  // 所有日期（全部資料）
   const availableDates = useMemo(() => Array.from(new Set(data.map(d => d.date))).sort((a, b) => b.localeCompare(a)), [data]);
+
+  // 僅含有 IRI 資料的日期（給色塊圖下拉使用）
+  const availableIriDates = useMemo(() =>
+    Array.from(new Set(
+      data.filter(d => d.route === selectedRoute && d.iri > 0).map(d => d.date)
+    )).sort((a, b) => b.localeCompare(a)),
+    [data, selectedRoute]
+  );
+
+  // 該路線 + 方向有資料的日期（給統計下拉使用）
+  const availableStatsDates = useMemo(() =>
+    Array.from(new Set(
+      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection).map(d => d.date)
+    )).sort((a, b) => b.localeCompare(a)),
+    [data, selectedRoute, selectedDirection]
+  );
 
   useEffect(() => {
     if (data.length > 0) {
@@ -429,7 +446,7 @@ export default function App() {
 
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
-    // 統計不筛車道，統計該日期該路線該方向的所有車道資料
+    // 統計筛選路線 + 方向 + 日期，不筛車道
     const statsData = data.filter(d =>
       d.route === selectedRoute &&
       d.direction === selectedDirection &&
@@ -747,14 +764,14 @@ export default function App() {
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-blue-600" />
-                        當期檢測統計 (依選定日期)
+                        檢測統計
                       </h4>
-                      <select 
-                        value={selectedDate} 
+                      <select
+                        value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
                         className="border border-slate-300 bg-white rounded py-1 px-2 text-sm font-medium text-slate-700 outline-none cursor-pointer"
                       >
-                        {availableDates.map(y => <option key={y} value={y}>{y}</option>)}
+                        {availableStatsDates.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -803,8 +820,6 @@ export default function App() {
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                       <div className="flex items-center gap-2 text-green-600">
                         <CheckCircle className="w-4 h-4" />
-                        <span className="text-xs font-medium">單年分析長度</span>
-                      </div>
                       <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
                     </div>
                     </div>
@@ -818,18 +833,36 @@ export default function App() {
             )}
 
             {activeTab === 'iri-map' && (() => {
-              const iriData = colorMapData.filter(d => d.iri > 0);
-              return iriData.length === 0 ? (
+              // 色塊圖用 availableIriDates，自動選第一個有 IRI 的日期
+              const iriDate = availableIriDates.includes(selectedDate) ? selectedDate : (availableIriDates[0] || '');
+              const iriData = data.filter(d =>
+                d.route === selectedRoute &&
+                d.iri > 0 &&
+                d.date === iriDate
+              );
+              return availableIriDates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
-                  <p className="text-sm">所選日期 ({selectedDate}) 無 IRI 資料，請確認資料庫日期格式是否一致。</p>
+                  <p className="text-sm">目前資料庫中沒有 IRI 檢測資料。</p>
                 </div>
               ) : (
               <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <label className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4" /> 檢測日期：
+                  </label>
+                  <select
+                    value={iriDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="border border-slate-300 bg-white rounded-lg py-1.5 px-3 text-sm font-medium text-slate-700 outline-none cursor-pointer"
+                  >
+                    {availableIriDates.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
                 {availableDirections.map(dir => (
                   <ColorMap 
                     key={dir}
                     data={iriData.filter(d => d.direction === dir)} 
-                    title={`${selectedDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
+                    title={`${iriDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
                   />
                 ))}
               </div>
