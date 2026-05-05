@@ -758,82 +758,83 @@ export default function App() {
                   <p className="text-sm">請上傳歷史 CSV 資料以顯示趨勢圖</p>
                 </div>
               ) : (
-              <div className="space-y-6">
-                {stats && (
-                  <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-blue-600" />
-                        檢測統計
-                      </h4>
-                      <select
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="border border-slate-300 bg-white rounded py-1 px-2 text-sm font-medium text-slate-700 outline-none cursor-pointer"
-                      >
-                        {availableStatsDates.map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-blue-600">
-                        <Activity className="w-4 h-4" />
-                        <span className="text-xs font-medium">平均 IRI</span>
+                <div className="space-y-6">
+                  {stats && (
+                    <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-blue-600" />
+                          檢測統計
+                        </h4>
+                        <select
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="border border-slate-300 bg-white rounded py-1 px-2 text-sm font-medium text-slate-700 outline-none cursor-pointer"
+                        >
+                          {availableStatsDates.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
                       </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-purple-600">
-                        <Activity className="w-4 h-4" />
-                        <span className="text-xs font-medium">平均 SN</span>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Activity className="w-4 h-4" />
+                            <span className="text-xs font-medium">平均 IRI</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-purple-600">
+                            <Activity className="w-4 h-4" />
+                            <span className="text-xs font-medium">平均 SN</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-yellow-600">
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-xs font-medium">IRI ≥ 1.75</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.pct175}%</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-orange-600">
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-xs font-medium">IRI ≥ 2.0</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.pct20}%</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-red-600">
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-xs font-medium">IRI ≥ 2.5</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-red-600">
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-xs font-medium">SN &lt; 35</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.countSn35} 處</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="text-xs font-medium">分析長度</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
+                        </div>
                       </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-yellow-600">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-medium">IRI ≥ 1.75</span>
-                      </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.pct175}%</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-medium">IRI ≥ 2.0</span>
-                      </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.pct20}%</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-red-600">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-medium">IRI ≥ 2.5</span>
-                      </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-red-600">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-medium">SN &lt; 35</span>
-                      </div>
-                      <p className="text-xl font-bold text-slate-800">{stats.countSn35} 處</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="w-4 h-4" />
-                      <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
-                    </div>
-                    </div>
-                  </div>
-                )}
-                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="iri" />
-                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="prqi" />
-                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="sn" />
-              </div>
+                  )}
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="iri" />
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="prqi" />
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="sn" />
+                </div>
               )
             )}
 
             {activeTab === 'iri-map' && (() => {
-              // 色塊圖用 availableIriDates，自動選第一個有 IRI 的日期
               const iriDate = availableIriDates.includes(selectedDate) ? selectedDate : (availableIriDates[0] || '');
               const iriData = data.filter(d =>
                 d.route === selectedRoute &&
@@ -845,30 +846,29 @@ export default function App() {
                   <p className="text-sm">目前資料庫中沒有 IRI 檢測資料。</p>
                 </div>
               ) : (
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <label className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4" /> 檢測日期：
-                  </label>
-                  <select
-                    value={iriDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="border border-slate-300 bg-white rounded-lg py-1.5 px-3 text-sm font-medium text-slate-700 outline-none cursor-pointer"
-                  >
-                    {availableIriDates.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <label className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4" /> 檢測日期：
+                    </label>
+                    <select
+                      value={iriDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="border border-slate-300 bg-white rounded-lg py-1.5 px-3 text-sm font-medium text-slate-700 outline-none cursor-pointer"
+                    >
+                      {availableIriDates.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  {availableDirections.map(dir => (
+                    <ColorMap 
+                      key={dir}
+                      data={iriData.filter(d => d.direction === dir)} 
+                      title={`${iriDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
+                    />
+                  ))}
                 </div>
-                {availableDirections.map(dir => (
-                  <ColorMap 
-                    key={dir}
-                    data={iriData.filter(d => d.direction === dir)} 
-                    title={`${iriDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
-                  />
-                ))}
-              </div>
               );
             })()}
-
 
           </div>
         )}
