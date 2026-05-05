@@ -301,6 +301,9 @@ export default function App() {
     const pct175 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 1.75).length / iriData.length * 100) : 0;
     const pct20 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.0).length / iriData.length * 100) : 0;
     const pct25 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.5).length / iriData.length * 100) : 0;
+    
+    // SN 統計：<35 的筆數 (處)
+    const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
     const mileages: number[] = Array.from(new Set<number>(statsData.map(d => d.mileage)));
     const totalLength = mileages.length > 0 ? Math.max(...mileages) - Math.min(...mileages) : 0;
@@ -311,6 +314,7 @@ export default function App() {
       pct175: pct175.toFixed(1),
       pct20: pct20.toFixed(1),
       pct25: pct25.toFixed(1),
+      countSn35,
       totalLength: totalLength.toFixed(1)
     };
   }, [currentViewData, activeTab]);
@@ -580,7 +584,7 @@ export default function App() {
               ) : (
               <div className="space-y-6">
                 {stats && (
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                       <div className="flex items-center gap-2 text-blue-600">
                         <Activity className="w-4 h-4" />
@@ -615,6 +619,13 @@ export default function App() {
                         <span className="text-xs font-medium">IRI ≥ 2.5</span>
                       </div>
                       <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-medium">SN &lt; 35</span>
+                      </div>
+                      <p className="text-xl font-bold text-slate-800">{stats.countSn35} 處</p>
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                       <div className="flex items-center gap-2 text-green-600">

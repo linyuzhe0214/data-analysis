@@ -131,6 +131,12 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 <ReferenceLine y={1.3} stroke="#22c55e" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=1.3', fill: '#22c55e', fontSize: 12 }} />
                 <ReferenceLine y={1.75} stroke="#eab308" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=1.75', fill: '#eab308', fontSize: 12 }} />
                 <ReferenceLine y={2.0} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=2.0', fill: '#ef4444', fontSize: 12 }} />
+                <ReferenceLine y={2.5} stroke="#9333ea" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=2.5', fill: '#9333ea', fontSize: 12 }} />
+              </>
+            )}
+            {type === 'sn' && (
+              <>
+                <ReferenceLine y={35} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'SN=35', fill: '#ef4444', fontSize: 12 }} />
               </>
             )}
             {chartData.keys.map((key, index) => (
