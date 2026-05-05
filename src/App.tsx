@@ -538,10 +538,10 @@ export default function App() {
                   </>
                 )}
 
-                {(activeTab === 'iri-map' || activeTab === 'trends') && (
+                {activeTab === 'iri-map' && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 檢測日期 {activeTab === 'iri-map' ? '(色塊圖)' : '(統計)'}
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> 檢測日期 (色塊圖)
                     </label>
                     <select 
                       value={selectedDate} 
@@ -660,7 +660,21 @@ export default function App() {
               ) : (
               <div className="space-y-6">
                 {stats && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                  <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-blue-600" />
+                        當期檢測統計 (依選定日期)
+                      </h4>
+                      <select 
+                        value={selectedDate} 
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="border border-slate-300 bg-white rounded py-1 px-2 text-sm font-medium text-slate-700 outline-none cursor-pointer"
+                      >
+                        {availableDates.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                       <div className="flex items-center gap-2 text-blue-600">
                         <Activity className="w-4 h-4" />
@@ -709,6 +723,7 @@ export default function App() {
                         <span className="text-xs font-medium">單年分析長度</span>
                       </div>
                       <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
+                    </div>
                     </div>
                   </div>
                 )}
