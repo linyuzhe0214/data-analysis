@@ -481,8 +481,17 @@ export default function App() {
     
     const routeData = data.filter(d => d.route === selectedRoute && d.direction === selectedDirection);
     
-    const iriData = selectedIriDate ? routeData.filter(d => d.date === selectedIriDate && d.iri > 0) : [];
-    const snData = selectedSnDate ? routeData.filter(d => d.date === selectedSnDate && d.sn > 0) : [];
+    const iriData = selectedIriDate ? routeData.filter(d => 
+      d.date === selectedIriDate && 
+      d.iri > 0 && 
+      (!selectedLane || d.lane === selectedLane)
+    ) : [];
+    
+    const snData = selectedSnDate ? routeData.filter(d => 
+      d.date === selectedSnDate && 
+      d.sn > 0 && 
+      (!selectedLane || d.lane === selectedLane)
+    ) : [];
 
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
     const avgSn = snData.length > 0 ? snData.reduce((acc, curr) => acc + curr.sn, 0) / snData.length : 0;
