@@ -23,7 +23,22 @@ const LS_KEY = 'pavement_data_v1';
 function loadFromLocalStorage(): PavementData[] {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    
+    const parsed = JSON.parse(raw) as PavementData[];
+    
+    const normalizeDateStr = (rawVal: any): string => {
+      if (!rawVal) return new Date().toISOString().split('T')[0];
+      let s = String(rawVal).trim();
+      if (s.includes('T')) s = s.split('T')[0];
+      if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+      return s.replace(/[\/\.]/g, '-');
+    };
+
+    return parsed.map(d => ({
+      ...d,
+      date: normalizeDateStr(d.date)
+    }));
   } catch {
     return [];
   }
@@ -82,6 +97,14 @@ export default function App() {
           fetchIRIData().catch(() => [] as any[])
         ]);
         
+        const normalizeDateStr = (raw: any): string => {
+          if (!raw) return new Date().toISOString().split('T')[0];
+          let s = String(raw).trim();
+          if (s.includes('T')) s = s.split('T')[0];
+          if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+          return s.replace(/[\/\.]/g, '-');
+        };
+        
         const parseMileageToNumber = (raw: any): number => {
           if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
           const str = String(raw || '');
@@ -95,7 +118,7 @@ export default function App() {
 
         snRaw.forEach(p => {
           newPavementData.push({
-            date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
+            date: normalizeDateStr(p.date),
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
             lane: normalizeLane(p.lane),
@@ -108,7 +131,7 @@ export default function App() {
 
         iriRaw.forEach(p => {
           newPavementData.push({
-            date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
+            date: normalizeDateStr(p.date),
             route: p.route || '未知路線',
             direction: p.direction || '未知方向',
             lane: normalizeLane(p.lane),
@@ -249,9 +272,17 @@ export default function App() {
         return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
       };
 
+      const normalizeDateStr = (raw: any): string => {
+        if (!raw) return new Date().toISOString().split('T')[0];
+        let s = String(raw).trim();
+        if (s.includes('T')) s = s.split('T')[0];
+        if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+        return s.replace(/[\/\.]/g, '-');
+      };
+
       // 無論有沒有 GAS，先把資料更新到本地儀表板
       const mappedToPavementData = allParsed.map(p => ({
-        date: p.date ? String(p.date) : new Date().toISOString().split('T')[0],
+        date: normalizeDateStr(p.date),
         route: p.route || '未知路線',
         direction: p.direction || '未知方向',
         lane: normalizeLane(p.lane),

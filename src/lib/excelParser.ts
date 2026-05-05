@@ -93,8 +93,13 @@ const normalizeDateTimeValue = (val: unknown): { date: string; time: string } =>
     return { date: datePart, time: timePart ?? '' };
   }
 
-  // 純西元日期
+  // 純西元日期 YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return { date: s, time: '' };
+
+  // 純西元數字 YYYYMMDD (例如 20240514)
+  if (/^20\d{6}$/.test(s)) {
+    return { date: `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`, time: '' };
+  }
 
   // 民國日期（含時間）：1140422 09:30:00
   const rocWithTime = s.match(/^(\d{7})\s+(\d{2}:\d{2}(:\d{2})?)/);
