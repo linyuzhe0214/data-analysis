@@ -220,7 +220,12 @@ export default function App() {
   }, [selectedRoute, data]);
 
   const availableLanes = useMemo(() => {
-    const dataLanes = Array.from(new Set(data.filter(d => d.route === selectedRoute && d.direction === selectedDirection).map(d => d.lane))).filter(Boolean) as string[];
+    const routeData = data.filter(d => d.route === selectedRoute);
+    const directionData = (selectedDirection === '雙向' || !selectedDirection) 
+      ? routeData 
+      : routeData.filter(d => d.direction === selectedDirection);
+    
+    const dataLanes = Array.from(new Set(directionData.map(d => d.lane))).filter(Boolean) as string[];
     const laneOrder = [
       '內側車道', '第一車道', 
       '中線車道', '第二車道', '第2及第3車道',
@@ -239,43 +244,25 @@ export default function App() {
   // 所有日期（全部資料）
   const availableDates = useMemo(() => Array.from(new Set(data.map(d => d.date))).sort((a, b) => b.localeCompare(a)), [data]);
 
-  // 僅含有 IRI 資料的日期（給色塊圖下拉使用）
-  const availableIriDates = useMemo(() =>
-    Array.from(new Set(
+  // 僅含有 IRI 資料的日期（不分方向，給色塊圖與統計下拉共用以確保不為空）
+  const availableIriDatesByRoute = useMemo(() => {
+    if (!selectedRoute) return [];
+    return Array.from(new Set(
       data.filter(d => d.route === selectedRoute && d.iri > 0).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a)),
-    [data, selectedRoute]
-  );
+    )).sort((a, b) => b.localeCompare(a));
+  }, [data, selectedRoute]);
 
-  // 該路線 + 方向有資料的日期（給統計下拉使用）
-  const availableStatsDates = useMemo(() =>
-    Array.from(new Set(
-      data.filter(d => d.route === selectedRoute && d.direction === selectedDirection).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a)),
-    [data, selectedRoute, selectedDirection]
-  );
+  const availableSnDatesByRoute = useMemo(() => {
+    if (!selectedRoute) return [];
+    return Array.from(new Set(
+      data.filter(d => d.route === selectedRoute && d.sn > 0).map(d => d.date)
+    )).sort((a, b) => b.localeCompare(a));
+  }, [data, selectedRoute]);
 
-  const availableIriDatesByRoute = useMemo(() =>
-    Array.from(new Set(
-      data.filter(d => 
-        d.route === selectedRoute && 
-        (selectedDirection === '雙向' || d.direction === selectedDirection) && 
-        d.iri > 0
-      ).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a)),
-    [data, selectedRoute, selectedDirection]
-  );
+  // 給色塊圖專用的 Alias
+  const availableIriDates = availableIriDatesByRoute;
 
-  const availableSnDatesByRoute = useMemo(() =>
-    Array.from(new Set(
-      data.filter(d => 
-        d.route === selectedRoute && 
-        (selectedDirection === '雙向' || d.direction === selectedDirection) && 
-        d.sn > 0
-      ).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a)),
-    [data, selectedRoute, selectedDirection]
-  );
+
 
   useEffect(() => {
     if (data.length > 0) {
@@ -290,7 +277,7 @@ export default function App() {
         setSelectedIriDate(availableIriDatesByRoute[0]);
       }
     }
-  }, [availableIriDatesByRoute]);
+  }, [availableIriDatesByRoute, selectedIriDate]);
 
   useEffect(() => {
     if (availableSnDatesByRoute.length > 0) {
@@ -298,7 +285,7 @@ export default function App() {
         setSelectedSnDate(availableSnDatesByRoute[0]);
       }
     }
-  }, [availableSnDatesByRoute]);
+  }, [availableSnDatesByRoute, selectedSnDate]);
 
   useEffect(() => {
     if (availableDirections.length > 0) {
