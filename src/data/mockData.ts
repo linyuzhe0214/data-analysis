@@ -44,7 +44,8 @@ export const generateMockData = (): PavementData[] => {
               lane,
               mileage: Number(mileage.toFixed(1)),
               iri: Number(currentIri.toFixed(2)),
-              sn: Number(currentSn.toFixed(1))
+              sn: Number(currentSn.toFixed(1)),
+              prqi: Number((10 - currentIri * 2).toFixed(1))
             });
           }
         });

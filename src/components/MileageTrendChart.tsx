@@ -17,7 +17,7 @@ interface MileageTrendChartProps {
   route: string;
   direction: string;
   lane: string;
-  type: 'iri' | 'sn';
+  type: 'iri' | 'sn' | 'prqi';
 }
 
 const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c', '#4ade80'];
@@ -43,7 +43,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
       d.route === route && 
       d.direction === direction &&
       (!lane || d.lane === lane) &&
-      (type === 'iri' ? d.iri > 0 : d.sn > 0)
+      (type === 'iri' ? d.iri > 0 : type === 'sn' ? d.sn > 0 : d.prqi > 0)
     );
     
     const byMileage: Record<number, any> = {};
@@ -59,7 +59,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
       if (!byMileage[d.mileage][dataKey]) {
         byMileage[d.mileage][dataKey] = { sum: 0, count: 0 };
       }
-      byMileage[d.mileage][dataKey].sum += type === 'iri' ? d.iri : d.sn;
+      byMileage[d.mileage][dataKey].sum += type === 'iri' ? d.iri : type === 'sn' ? d.sn : d.prqi;
       byMileage[d.mileage][dataKey].count += 1;
       keysSet.add(dataKey);
     });
@@ -91,8 +91,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
     );
   }
 
-  const title = type === 'iri' ? 'IRI 歷年變化趨勢' : 'SN 歷年變化趨勢';
-  const yAxisLabel = type === 'iri' ? 'IRI (m/km)' : 'SN';
+  const title = type === 'iri' ? 'IRI 歷年變化趨勢' : type === 'sn' ? 'SN 歷年變化趨勢' : 'PRQI 歷年變化趨勢';
+  const yAxisLabel = type === 'iri' ? 'IRI (m/km)' : type === 'sn' ? 'SN' : 'PRQI';
 
   return (
     <div className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-200">

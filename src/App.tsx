@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import Papa from 'papaparse';
-import { Upload, FileDown, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
+import { Upload, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
 import { PavementData } from './types';
-import { generateMockData } from './data/mockData';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
@@ -103,7 +101,8 @@ export default function App() {
             lane: normalizeLane(p.lane),
             mileage: parseMileageToNumber(p.mileage),
             iri: 0,
-            sn: p.sn ? Number(p.sn) : 0
+            sn: p.sn ? Number(p.sn) : 0,
+            prqi: 0
           });
         });
 
@@ -115,7 +114,8 @@ export default function App() {
             lane: normalizeLane(p.lane),
             mileage: parseMileageToNumber(p.mileage),
             iri: p.avgIri ? Number(p.avgIri) : 0,
-            sn: 0
+            sn: 0,
+            prqi: p.avgPrqi ? Number(p.avgPrqi) : 0
           });
         });
 
@@ -132,7 +132,6 @@ export default function App() {
     syncFromDB();
   }, []);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const iriFileInputRef = useRef<HTMLInputElement>(null);
   const snFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -190,40 +189,6 @@ export default function App() {
       setSelectedLane(availableLanes[0]);
     }
   }, [availableLanes, selectedLane]);
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const parsedData: PavementData[] = results.data
-          .filter((row: any) => row.year && row.route && row.direction && row.mileage !== undefined && row.iri !== undefined && row.sn !== undefined)
-          .map((row: any) => ({
-            year: Number(row.year),
-            route: String(row.route),
-            direction: String(row.direction),
-            lane: normalizeLane(row.lane),
-            mileage: Number(row.mileage),
-            iri: Number(row.iri),
-            sn: Number(row.sn)
-          }));
-        
-        if (parsedData.length > 0) {
-          setDataPersist(parsedData);
-        } else {
-          alert('無法解析資料，請確認 CSV 格式包含: year, route, direction, mileage, iri, sn');
-        }
-      },
-      error: (error) => {
-        console.error('Error parsing CSV:', error);
-        alert('檔案解析發生錯誤');
-      }
-    });
-  };
 
   /** 通用上傳處理：擷取檔案後開啟精靈 */
   const handleRawIriUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,7 +257,8 @@ export default function App() {
         lane: normalizeLane(p.lane),
         mileage: parseMileageToNumber(p.mileage),
         iri: p.avgIri ? Number(p.avgIri) : 0,
-        sn: p.sn ? Number(p.sn) : 0
+        sn: p.sn ? Number(p.sn) : 0,
+        prqi: p.avgPrqi ? Number(p.avgPrqi) : 0
       }));
       setDataPersist(prev => [...prev, ...mappedToPavementData]);
 
@@ -346,10 +312,6 @@ export default function App() {
     }
 
     setUploading(false);
-  };
-
-  const loadMockData = () => {
-    setDataPersist(generateMockData());
   };
 
   const clearLocalData = () => {
@@ -426,13 +388,6 @@ export default function App() {
           <div className="flex items-center gap-3">
             <input 
               type="file" 
-              accept=".csv" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-            />
-            <input 
-              type="file" 
               accept=".xlsx,.xls,.csv" 
               multiple
               className="hidden" 
@@ -447,14 +402,6 @@ export default function App() {
               ref={snFileInputRef}
               onChange={handleRawSnUpload}
             />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-              上傳歷史 CSV
-            </button>
-            <div className="h-6 w-px bg-slate-300"></div>
             {uploading && (
               <span className="flex items-center gap-1 text-sm text-blue-600 font-medium">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -475,13 +422,6 @@ export default function App() {
               <Upload className="w-4 h-4" />
               匯入原始 SN
             </button>
-            <button 
-              onClick={loadMockData}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm ml-2"
-            >
-              <FileDown className="w-4 h-4" />
-              載入範例資料
-            </button>
           </div>
         </div>
       </header>
@@ -491,7 +431,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
             <Activity className="w-16 h-16 text-slate-300 mb-4" />
             <h2 className="text-xl font-medium text-slate-700 mb-2">尚未載入資料</h2>
-            <p className="mb-6">請上傳包含檢測資料的 CSV 檔案，或載入範例資料開始分析。</p>
+            <p className="mb-6">請點擊上方按鈕匯入檢測資料檔案開始分析。</p>
             <div className="flex gap-4">
               <button 
                 onClick={() => iriFileInputRef.current?.click()}
@@ -504,12 +444,6 @@ export default function App() {
                 className="px-6 py-2.5 bg-orange-50 border border-orange-200 rounded-lg font-medium text-orange-700 hover:bg-orange-100 transition-colors"
               >
                 匯入 SN 報表
-              </button>
-              <button 
-                onClick={loadMockData}
-                className="px-6 py-2.5 bg-blue-600 rounded-lg font-medium text-white hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                載入範例資料
               </button>
             </div>
           </div>
@@ -748,6 +682,7 @@ export default function App() {
                   </div>
                 )}
                 <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="iri" />
+                <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="prqi" />
                 <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="sn" />
               </div>
               )
