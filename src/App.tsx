@@ -30,9 +30,28 @@ function loadFromLocalStorage(): PavementData[] {
     const normalizeDateStr = (rawVal: any): string => {
       if (!rawVal) return new Date().toISOString().split('T')[0];
       let s = String(rawVal).trim();
-      if (s.includes('T')) s = s.split('T')[0];
+      if (s.includes('T') && s.endsWith('Z')) {
+         const d = new Date(s);
+         if (!isNaN(d.getTime())) {
+             const y = d.getFullYear();
+             const m = String(d.getMonth() + 1).padStart(2, '0');
+             const day = String(d.getDate()).padStart(2, '0');
+             s = `${y}-${m}-${day}`;
+         } else {
+             s = s.split('T')[0];
+         }
+      } else if (s.includes('T')) {
+          s = s.split('T')[0];
+      }
       if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-      return s.replace(/[\/\.]/g, '-');
+      s = s.replace(/[\/\.]/g, '-');
+      const parts = s.split('-');
+      if (parts.length === 3) {
+          parts[1] = parts[1].padStart(2, '0');
+          parts[2] = parts[2].padStart(2, '0');
+          s = parts.join('-');
+      }
+      return s;
     };
 
     return parsed.map(d => ({
@@ -100,9 +119,28 @@ export default function App() {
         const normalizeDateStr = (raw: any): string => {
           if (!raw) return new Date().toISOString().split('T')[0];
           let s = String(raw).trim();
-          if (s.includes('T')) s = s.split('T')[0];
+          if (s.includes('T') && s.endsWith('Z')) {
+             const d = new Date(s);
+             if (!isNaN(d.getTime())) {
+                 const y = d.getFullYear();
+                 const m = String(d.getMonth() + 1).padStart(2, '0');
+                 const day = String(d.getDate()).padStart(2, '0');
+                 s = `${y}-${m}-${day}`;
+             } else {
+                 s = s.split('T')[0];
+             }
+          } else if (s.includes('T')) {
+              s = s.split('T')[0];
+          }
           if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-          return s.replace(/[\/\.]/g, '-');
+          s = s.replace(/[\/\.]/g, '-');
+          const parts = s.split('-');
+          if (parts.length === 3) {
+              parts[1] = parts[1].padStart(2, '0');
+              parts[2] = parts[2].padStart(2, '0');
+              s = parts.join('-');
+          }
+          return s;
         };
         
         const parseMileageToNumber = (raw: any): number => {
@@ -275,9 +313,28 @@ export default function App() {
       const normalizeDateStr = (raw: any): string => {
         if (!raw) return new Date().toISOString().split('T')[0];
         let s = String(raw).trim();
-        if (s.includes('T')) s = s.split('T')[0];
+        if (s.includes('T') && s.endsWith('Z')) {
+           const d = new Date(s);
+           if (!isNaN(d.getTime())) {
+               const y = d.getFullYear();
+               const m = String(d.getMonth() + 1).padStart(2, '0');
+               const day = String(d.getDate()).padStart(2, '0');
+               s = `${y}-${m}-${day}`;
+           } else {
+               s = s.split('T')[0];
+           }
+        } else if (s.includes('T')) {
+            s = s.split('T')[0];
+        }
         if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-        return s.replace(/[\/\.]/g, '-');
+        s = s.replace(/[\/\.]/g, '-');
+        const parts = s.split('-');
+        if (parts.length === 3) {
+            parts[1] = parts[1].padStart(2, '0');
+            parts[2] = parts[2].padStart(2, '0');
+            s = parts.join('-');
+        }
+        return s;
       };
 
       // 無論有沒有 GAS，先把資料更新到本地儀表板

@@ -215,7 +215,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
               </p>
               
               <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="例如: 2024-05-01" showAutoDetect />
+                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="建議格式: 20240514 或 2024-05-14" showAutoDetect />
                 <GlobalSelect label="預設路線" value={rule.globals.route} onChange={(v) => handleGlobalChange('route', v)} />
                 {type === 'iri' && <GlobalSelect label="預設方向" value={rule.globals.direction} onChange={(v) => handleGlobalChange('direction', v)} />}
                 <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />

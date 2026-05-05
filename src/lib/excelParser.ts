@@ -69,13 +69,16 @@ const normalizeDateTimeValue = (val: unknown): { date: string; time: string } =>
   if (!val) return { date: '', time: '' };
 
   // JS Date 物件（cellDates: true 時出現）
-  if (val instanceof Date) {
-    const iso = val.toISOString(); // UTC
-    // Excel 日期通常直接是當地時間，不做 timezone 轉換
-    const [datePart, timePart] = iso.split('T');
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    const hh = String(val.getHours()).padStart(2, '0');
+    const mm = String(val.getMinutes()).padStart(2, '0');
+    const ss = String(val.getSeconds()).padStart(2, '0');
     return {
-      date: datePart,
-      time: timePart?.split('.')[0] ?? '',
+      date: `${y}-${m}-${d}`,
+      time: hh === '00' && mm === '00' && ss === '00' ? '' : `${hh}:${mm}:${ss}`,
     };
   }
 
