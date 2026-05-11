@@ -11,6 +11,7 @@ export interface PavementData {
 
 export type IriCondition = 'level1' | 'level2' | 'level3' | 'level4' | 'level5' | 'level6';
 export type SnCondition = 'good' | 'fair' | 'poor';
+export type PrqiCondition = 'good' | 'fair' | 'poor';
 
 export const getIriCondition = (iri: number): IriCondition => {
   if (iri <= 1.0) return 'level1';
@@ -24,6 +25,12 @@ export const getIriCondition = (iri: number): IriCondition => {
 export const getSnCondition = (sn: number): SnCondition => {
   if (sn >= 50) return 'good';
   if (sn >= 40) return 'fair';
+  return 'poor';
+};
+
+export const getPrqiCondition = (prqi: number): PrqiCondition => {
+  if (prqi < 0.2) return 'good';
+  if (prqi <= 0.3) return 'fair';
   return 'poor';
 };
 
@@ -43,3 +50,11 @@ export const getSnColor = (sn: number) => {
   if (condition === 'fair') return 'bg-yellow-400';
   return 'bg-red-500';
 };
+
+export const getPrqiColor = (prqi: number) => {
+  const condition = getPrqiCondition(prqi);
+  if (condition === 'good') return 'bg-green-500';
+  if (condition === 'fair') return 'bg-yellow-400';
+  return 'bg-red-500';
+};
+

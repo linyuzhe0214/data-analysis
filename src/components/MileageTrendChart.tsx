@@ -139,6 +139,13 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
                 <ReferenceLine y={35} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'SN=35', fill: '#ef4444', fontSize: 12 }} />
               </>
             )}
+            {type === 'prqi' && (
+              <>
+                <ReferenceLine y={0.2} stroke="#22c55e" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: '良好 (0.2)', fill: '#22c55e', fontSize: 12 }} />
+                <ReferenceLine y={0.3} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: '不佳 (0.3)', fill: '#ef4444', fontSize: 12 }} />
+              </>
+            )}
+
             {chartData.keys.map((key, index) => (
               <Line 
                 key={key}
