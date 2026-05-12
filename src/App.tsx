@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Upload, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
+import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
 import { PavementData } from './types';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
+import { ExportWizard } from './components/ExportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
 import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, GAS_URL } from './lib/gasService';
 
@@ -105,6 +106,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
+  const [showExportWizard, setShowExportWizard] = useState(false);
 
   // 從雲端資料庫同步（可手動觸發）
   const syncFromDB = async () => {
@@ -533,6 +535,9 @@ export default function App() {
           onCancel={() => setWizardState(null)} 
         />
       )}
+      {showExportWizard && (
+        <ExportWizard data={data} onClose={() => setShowExportWizard(false)} />
+      )}
       
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -595,6 +600,14 @@ export default function App() {
             >
               <Upload className="w-4 h-4" />
               匯入原始 SN
+            </button>
+            <div className="w-px h-6 bg-slate-300 mx-1"></div>
+            <button 
+              onClick={() => setShowExportWizard(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              匯出資料
             </button>
           </div>
         </div>
