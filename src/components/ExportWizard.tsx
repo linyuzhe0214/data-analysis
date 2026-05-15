@@ -10,19 +10,36 @@ interface ExportWizardProps {
 
 export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => {
   const [category, setCategory] = useState<'IRI' | 'SN' | 'PRQI'>('SN');
-  
-  // 依據選擇的種類，取得所有不重複且有效的日期
+  const [selectedRoute, setSelectedRoute] = useState<string>('全部');
+
+  const routes = useMemo(() => {
+    const rSet = new Set<string>();
+    data.forEach(d => {
+      if (category === 'IRI' && d.iri > 0) rSet.add(d.route);
+      if (category === 'SN' && d.sn > 0) rSet.add(d.route);
+      if (category === 'PRQI' && d.prqi > 0) rSet.add(d.route);
+    });
+    return ['全部', ...Array.from(rSet).sort()];
+  }, [data, category]);
+
+  React.useEffect(() => {
+    setSelectedRoute('全部');
+  }, [category]);
+
+  // 依據選擇的種類、路線，取得所有不重複且有效的日期
   const availableDates = useMemo(() => {
     const dates = new Set<string>();
     data.forEach(d => {
+      if (selectedRoute !== '全部' && d.route !== selectedRoute) return;
+
       if (category === 'IRI' && d.iri > 0) dates.add(d.date);
       if (category === 'SN' && d.sn > 0) dates.add(d.date);
       if (category === 'PRQI' && d.prqi > 0) dates.add(d.date);
     });
     return Array.from(dates).sort((a, b) => b.localeCompare(a));
-  }, [data, category]);
+  }, [data, category, selectedRoute]);
 
-  const [selectedDate, setSelectedDate] = useState<string>(availableDates[0] || '');
+  const [selectedDate, setSelectedDate] = useState<string>('');
 
   // 更新 selectedDate 以避免選到無效的日期
   React.useEffect(() => {
@@ -57,6 +74,8 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
     // 篩選對應日期與種類有數值的資料
     const filteredData = data.filter(d => {
       if (d.date !== selectedDate) return false;
+      if (selectedRoute !== '全部' && d.route !== selectedRoute) return false;
+
       if (category === 'IRI') return d.iri > 0;
       if (category === 'SN') return d.sn > 0;
       if (category === 'PRQI') return d.prqi > 0;
@@ -68,7 +87,8 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
       return;
     }
 
-    const fileName = `${category}_${selectedDate.replace(/-/g, '')}.xlsx`;
+    const routeStr = selectedRoute !== '全部' ? `_${selectedRoute}` : '';
+    const fileName = `${category}${routeStr}_${selectedDate.replace(/-/g, '')}.xlsx`;
     generateExportExcel(filteredData, category, manualValues, fileName);
     onClose();
   };
@@ -92,13 +112,13 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
             <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
               <Settings2 className="w-4 h-4 text-slate-400" /> 匯出資料篩選
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">資料種類</label>
                 <select 
                   value={category} 
                   onChange={(e) => setCategory(e.target.value as any)}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
                   <option value="SN">SN 值</option>
                   <option value="PRQI">PRQI 值</option>
@@ -106,11 +126,21 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1.5">路線篩選</label>
+                <select 
+                  value={selectedRoute} 
+                  onChange={(e) => setSelectedRoute(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                >
+                  {routes.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">檢測時間</label>
                 <select 
                   value={selectedDate} 
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   disabled={availableDates.length === 0}
                 >
                   {availableDates.length === 0 ? (
