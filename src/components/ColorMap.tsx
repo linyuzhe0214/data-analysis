@@ -18,29 +18,33 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
       lanesSet.add(d.lane);
       if (d.mileage < minM) minM = d.mileage;
       if (d.mileage > maxM) maxM = d.mileage;
-      
+
       if (!grouped[d.lane]) grouped[d.lane] = [];
       grouped[d.lane].push(d);
     });
 
-    // Sort lanes logically (Inner to Outer)
-    const laneOrder = ['內側車道', '中線車道', '外側車道'];
+    // Sort lanes: 第一→第二→第三→... 或 內側→中線→外側
+    const laneOrder = [
+      '內側車道', '第一車道',
+      '中線車道', '第二車道',
+      '外側車道', '第三車道',
+      '第四車道', '第五車道',
+    ];
     const sortedLanes = Array.from(lanesSet).sort((a, b) => {
       const idxA = laneOrder.indexOf(a);
       const idxB = laneOrder.indexOf(b);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
     });
 
-    // Sort data within each lane by mileage
     sortedLanes.forEach(lane => {
       grouped[lane].sort((a, b) => a.mileage - b.mileage);
     });
 
-    return { 
-      lanes: sortedLanes, 
-      minMileage: minM === Infinity ? 0 : minM, 
-      maxMileage: maxM === -Infinity ? 0 : maxM, 
-      groupedData: grouped 
+    return {
+      lanes: sortedLanes,
+      minMileage: minM === Infinity ? 0 : minM,
+      maxMileage: maxM === -Infinity ? 0 : maxM,
+      groupedData: grouped,
     };
   }, [data]);
 
@@ -51,6 +55,29 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
       </div>
     );
   }
+
+  const totalRange = maxMileage - minMileage || 1;
+
+  // 計算每個資料點的色塊位置與寬度（以里程比例），使第三車道只出現在 0~16k 範圍
+  const getSegments = (points: PavementData[]) => {
+    return points.map((point, i) => {
+      const prev = points[i - 1];
+      const next = points[i + 1];
+
+      const leftM = prev
+        ? (prev.mileage + point.mileage) / 2
+        : point.mileage - (next ? (next.mileage - point.mileage) / 2 : 0.05);
+
+      const rightM = next
+        ? (point.mileage + next.mileage) / 2
+        : point.mileage + (prev ? (point.mileage - prev.mileage) / 2 : 0.05);
+
+      const leftPct = ((leftM - minMileage) / totalRange) * 100;
+      const widthPct = ((rightM - leftM) / totalRange) * 100;
+
+      return { point, leftPct, widthPct };
+    });
+  };
 
   return (
     <div className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -90,11 +117,13 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
             <div className="w-20 text-xs font-medium text-slate-600 text-right shrink-0">
               {lane}
             </div>
-            <div className="flex-1 h-8 flex rounded-sm overflow-hidden bg-slate-100">
-              {groupedData[lane].map((point, index) => (
+            {/* 絕對里程定位：bg-slate-100 底，色塊根據里程比例疊上去 */}
+            <div className="flex-1 h-8 relative rounded-sm overflow-hidden bg-slate-100">
+              {getSegments(groupedData[lane]).map(({ point, leftPct, widthPct }, index) => (
                 <div
                   key={`${point.mileage}-${index}`}
-                  className={cn("flex-1 h-full hover:opacity-75 transition-opacity cursor-crosshair", getIriColor(point.iri))}
+                  className={cn('absolute top-0 h-full hover:opacity-75 transition-opacity cursor-crosshair', getIriColor(point.iri))}
+                  style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                   title={`里程: ${point.mileage}k\n車道: ${lane}\nIRI: ${point.iri}`}
                 />
               ))}
