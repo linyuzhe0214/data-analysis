@@ -524,12 +524,14 @@ export default function App() {
     const mileages: number[] = Array.from(new Set<number>(allStatsData.map(d => d.mileage)));
     const totalLength = mileages.length > 0 ? Math.max(...mileages) - Math.min(...mileages) : 0;
 
+    const isMergedLane = selectedLane === MERGED_LANE_KEY;
+
     return {
-      avgIri: avgIri.toFixed(2),
+      avgIri: isMergedLane ? '0' : avgIri.toFixed(2),
       avgSn: avgSn.toFixed(1),
-      pct175: pct175.toFixed(1),
-      pct20: pct20.toFixed(1),
-      pct25: pct25.toFixed(1),
+      pct175: isMergedLane ? '0' : pct175.toFixed(1),
+      pct20: isMergedLane ? '0' : pct20.toFixed(1),
+      pct25: isMergedLane ? '0' : pct25.toFixed(1),
       countSn35,
       totalLength: totalLength.toFixed(1),
       iriDate: selectedIriDate,
@@ -859,7 +861,6 @@ export default function App() {
                           </select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-blue-600">
                             <Activity className="w-4 h-4" />
@@ -867,14 +868,6 @@ export default function App() {
                           </div>
                           <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
                           {stats.iriDate && <span className="text-[10px] text-slate-400 mt-1">{stats.iriDate} 檢測</span>}
-                        </div>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-purple-600">
-                            <Activity className="w-4 h-4" />
-                            <span className="text-xs font-medium">平均 SN</span>
-                          </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
-                          {stats.snDate && <span className="text-[10px] text-slate-400 mt-1">{stats.snDate} 檢測</span>}
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-yellow-600">
@@ -898,6 +891,14 @@ export default function App() {
                           <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                          <div className="flex items-center gap-2 text-purple-600">
+                            <Activity className="w-4 h-4" />
+                            <span className="text-xs font-medium">平均 SN</span>
+                          </div>
+                          <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
+                          {stats.snDate && <span className="text-[10px] text-slate-400 mt-1">{stats.snDate} 檢測</span>}
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-red-600">
                             <AlertTriangle className="w-4 h-4" />
                             <span className="text-xs font-medium">SN &lt; 35</span>
@@ -914,8 +915,12 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
+                  {selectedLane !== MERGED_LANE_KEY && (
+                    <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
+                  )}
+                  {selectedLane !== MERGED_LANE_KEY && (
+                    <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
+                  )}
                   <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" />
                 </div>
               )
