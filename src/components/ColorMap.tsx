@@ -8,11 +8,12 @@ interface ColorMapProps {
 }
 
 export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
-  const { lanes, minMileage, maxMileage, groupedData } = useMemo(() => {
+  const { lanes, minMileage, maxMileage, groupedData, laneMaxMileage } = useMemo(() => {
     const lanesSet = new Set<string>();
     let minM = Infinity;
     let maxM = -Infinity;
     const grouped: Record<string, PavementData[]> = {};
+    const laneMax: Record<string, number> = {};
 
     data.forEach(d => {
       lanesSet.add(d.lane);
@@ -21,6 +22,10 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
 
       if (!grouped[d.lane]) grouped[d.lane] = [];
       grouped[d.lane].push(d);
+
+      if (laneMax[d.lane] === undefined || d.mileage > laneMax[d.lane]) {
+        laneMax[d.lane] = d.mileage;
+      }
     });
 
     // Sort lanes: 第一→第二→第三→... 或 內側→中線→外側
@@ -45,6 +50,7 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
       minMileage: minM === Infinity ? 0 : minM,
       maxMileage: maxM === -Infinity ? 0 : maxM,
       groupedData: grouped,
+      laneMaxMileage: laneMax,
     };
   }, [data]);
 
@@ -112,24 +118,33 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
       </div>
 
       <div className="relative pt-2 pb-8 flex flex-col gap-1">
-        {lanes.map(lane => (
-          <div key={lane} className="flex items-center gap-2">
-            <div className="w-20 text-xs font-medium text-slate-600 text-right shrink-0">
-              {lane}
-            </div>
-            {/* 絕對里程定位：bg-slate-100 底，色塊根據里程比例疊上去 */}
-            <div className="flex-1 h-8 relative rounded-sm overflow-hidden bg-slate-100">
-              {getSegments(groupedData[lane]).map(({ point, leftPct, widthPct }, index) => (
+        {lanes.map(lane => {
+          // 該車道底色只延伸到其最後一筆資料的里程
+          const laneEndPct = (((laneMaxMileage[lane] ?? maxMileage) - minMileage) / totalRange) * 100;
+          return (
+            <div key={lane} className="flex items-center gap-2">
+              <div className="w-20 text-xs font-medium text-slate-600 text-right shrink-0">
+                {lane}
+              </div>
+              {/* 絕對里程定位：bg-slate-100 底只到該車道最後里程，色塊根據里程比例疊上去 */}
+              <div className="flex-1 h-8 relative rounded-sm overflow-hidden">
+                {/* 底色：只到該車道末端里程 */}
                 <div
-                  key={`${point.mileage}-${index}`}
-                  className={cn('absolute top-0 h-full hover:opacity-75 transition-opacity cursor-crosshair', getIriColor(point.iri))}
-                  style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                  title={`里程: ${point.mileage}k\n車道: ${lane}\nIRI: ${point.iri}`}
+                  className="absolute top-0 left-0 h-full bg-slate-100"
+                  style={{ width: `${laneEndPct}%` }}
                 />
-              ))}
+                {getSegments(groupedData[lane]).map(({ point, leftPct, widthPct }, index) => (
+                  <div
+                    key={`${point.mileage}-${index}`}
+                    className={cn('absolute top-0 h-full hover:opacity-75 transition-opacity cursor-crosshair', getIriColor(point.iri))}
+                    style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                    title={`里程: ${point.mileage}k\n車道: ${lane}\nIRI: ${point.iri}`}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Axis Labels */}
         <div className="absolute bottom-0 left-[5.5rem] right-0 h-8 flex justify-between items-end px-1 pointer-events-none">

@@ -26,17 +26,32 @@ const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c'
 export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, lane, mergedLaneKey, type }) => {
   const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
 
-  const handleLegendClick = (e: any) => {
-    const dataKey = String(e.dataKey);
-    setHiddenYears(prev => {
-      const next = new Set(prev);
-      if (next.has(dataKey)) {
-        next.delete(dataKey);
-      } else {
-        next.add(dataKey);
-      }
-      return next;
-    });
+  // isMerged 模式下，dataKey = "{date}_{lane}"；點圖例時同時切換同一日期的兩條線
+  const handleLegendClick = (dateKey: string) => {
+    if (isMerged) {
+      // dateKey 是日期，一次切換同日期的第二 & 第三
+      setHiddenYears(prev => {
+        const next = new Set(prev);
+        const k2 = `${dateKey}_第二車道`;
+        const k3 = `${dateKey}_第三車道`;
+        const isHidden = next.has(k2) || next.has(k3);
+        if (isHidden) {
+          next.delete(k2);
+          next.delete(k3);
+        } else {
+          next.add(k2);
+          next.add(k3);
+        }
+        return next;
+      });
+    } else {
+      setHiddenYears(prev => {
+        const next = new Set(prev);
+        if (next.has(dateKey)) next.delete(dateKey);
+        else next.add(dateKey);
+        return next;
+      });
+    }
   };
 
   // 合併模式：僅 SN 圖啟用，讓第二、第三車道各自發一條線（國4 16k前三車道、後二車道的外側連貫性）
@@ -87,7 +102,12 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
 
     const sortedKeys = Array.from(keysSet).sort((a, b) => a.localeCompare(b));
 
-    return { data: processedData, keys: sortedKeys };
+    // isMerged 模式：提取不重複的日期列表，供自訂圖例用
+    const mergedDates = isMerged
+      ? Array.from(new Set(Array.from(keysSet).map(k => k.split('_')[0]))).sort()
+      : [];
+
+    return { data: processedData, keys: sortedKeys, mergedDates };
   }, [data, route, direction, type, lane, isMerged]);
 
   if (chartData.data.length === 0) {
@@ -136,10 +156,44 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
               contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               labelFormatter={(label) => `里程: ${label}k`}
             />
-            <Legend 
-              wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }} 
-              onClick={handleLegendClick}
-            />
+            {!isMerged && (
+              <Legend 
+                wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }} 
+                onClick={(e: any) => handleLegendClick(String(e.dataKey))}
+              />
+            )}
+            {isMerged && (
+              // 自訂圖例：同日期二三車道合併為一個圖例項目
+              <Legend
+                content={() => (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', paddingTop: '20px', justifyContent: 'center' }}>
+                    {chartData.mergedDates.map((date, i) => {
+                      const k2 = `${date}_第二車道`;
+                      const k3 = `${date}_第三車道`;
+                      const isHidden = hiddenYears.has(k2) || hiddenYears.has(k3);
+                      const color = COLORS[i % COLORS.length];
+                      return (
+                        <div
+                          key={date}
+                          onClick={() => handleLegendClick(date)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            cursor: 'pointer', opacity: isHidden ? 0.35 : 1,
+                            userSelect: 'none', fontSize: '13px', color: '#475569'
+                          }}
+                        >
+                          <svg width="28" height="12">
+                            <line x1="0" y1="6" x2="28" y2="6" stroke={color} strokeWidth="2" strokeDasharray={i % 2 === 1 ? '4 2' : undefined} />
+                            <circle cx="14" cy="6" r="3" fill={color} />
+                          </svg>
+                          {date} (第二+三車道)
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              />
+            )}
             {type === 'iri' && (
               <>
                 <ReferenceLine y={1.0} stroke="#3b82f6" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'IRI=1.0', fill: '#3b82f6', fontSize: 12 }} />
@@ -161,21 +215,27 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
               </>
             )}
 
-            {chartData.keys.map((key, index) => (
-              <Line
-                key={key}
-                type="monotone"
-                dataKey={key}
-                name={formatLegendKey(key)}
-                stroke={COLORS[index % COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 6 }}
-                connectNulls={true}
-                hide={hiddenYears.has(key)}
-                strokeOpacity={hiddenYears.has(key) ? 0.2 : 1}
-              />
-            ))}
+            {chartData.keys.map((key, index) => {
+              // isMerged 模式：同日期的第二、第三車道用同一色（跟自訂圖例一致）
+              const colorIndex = isMerged
+                ? chartData.mergedDates.indexOf(key.split('_')[0])
+                : index;
+              return (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  name={formatLegendKey(key)}
+                  stroke={COLORS[(colorIndex >= 0 ? colorIndex : index) % COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6 }}
+                  connectNulls={true}
+                  hide={hiddenYears.has(key)}
+                  strokeOpacity={hiddenYears.has(key) ? 0.2 : 1}
+                />
+              );
+            })}
           </LineChart>
         </ResponsiveContainer>
       </div>
