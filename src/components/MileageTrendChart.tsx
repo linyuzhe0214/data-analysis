@@ -39,12 +39,14 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
     });
   };
 
-  // 合併模式：將第二、第三車道各自發一條線，dataKey 格式為 "{date}_第二車道" / "{date}_第三車道"
-  const isMerged = !!(mergedLaneKey && lane === mergedLaneKey);
+  // 合併模式：僅 SN 圖啟用，讓第二、第三車道各自發一條線（國4 16k前三車道、後二車道的外側連貫性）
+  const isMerged = !!(mergedLaneKey && lane === mergedLaneKey && type === 'sn');
 
   const chartData = useMemo(() => {
     const laneFilter = (d: PavementData): boolean => {
       if (isMerged) return d.lane === '第二車道' || d.lane === '第三車道';
+      // IRI/PRQI 選到合併選項時，降級為全車道顯示
+      if (mergedLaneKey && lane === mergedLaneKey) return true;
       return !lane || d.lane === lane;
     };
 
