@@ -138,8 +138,13 @@ export const formatMileageSN = (rawMileage: string): string => {
 /** 順樁/逆樁 × 國道 → 方向 */
 const resolveDirection = (raw: string, highway: string): string => {
   const isRoute4 = highway.includes('4');
-  if (raw.includes('逆樁') || raw === '北上') return isRoute4 ? '西向' : '北上';
-  if (raw.includes('順樁') || raw === '南下') return isRoute4 ? '東向' : '南下';
+  const s = String(raw).trim().toUpperCase();
+  
+  if (s.includes('逆') || s.includes('北') || s === 'N') return isRoute4 ? '西向' : '北上';
+  if (s.includes('順') || s.includes('南') || s === 'S') return isRoute4 ? '東向' : '南下';
+  if (s.includes('東') || s === 'E') return isRoute4 ? '東向' : '北上';
+  if (s.includes('西') || s === 'W') return isRoute4 ? '西向' : '南下';
+  
   if (['北上', '南下', '東向', '西向'].includes(raw)) return raw;
   return raw;
 };
@@ -440,65 +445,132 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
 
             // 處理多區塊 (Side-by-Side) 排列的報表，並做終極防呆
             const headerRow = rows[rule.headerRowIndex] || [];
-            let blockOffsets = [0];
-            const normalizedCols = { ...rule.columns };
+            
+            // 建立每個 block 的 column mapping
+            const blockMappings: Array<Record<string, number>> = [];
             
             if (rule.columns.mileage !== undefined && headerRow[rule.columns.mileage]) {
-              const mileageHeaderName = headerRow[rule.columns.mileage];
+              const sanitizeHeader = (h: any) => String(h ?? '').replace(/\s+/g, '');
+              const mileageHeaderName = sanitizeHeader(headerRow[rule.columns.mileage]);
+              
               const allMileageIndices: number[] = [];
               for (let c = 0; c < headerRow.length; c++) {
-                if (headerRow[c] === mileageHeaderName) {
+                if (sanitizeHeader(headerRow[c]) === mileageHeaderName && mileageHeaderName !== '') {
                   allMileageIndices.push(c);
                 }
               }
 
               if (allMileageIndices.length > 0) {
-                const baseIdx = allMileageIndices[0];
-                blockOffsets = allMileageIndices.map(idx => idx - baseIdx);
-
-                // 如果有多個區塊，將所有對應的欄位 index 強制「正規化」到第一個區塊
-                // 這樣就算使用者不小心點到右半邊的表頭，系統也會自動把它移回左半邊
-                if (blockOffsets.length > 1) {
-                  const blockWidth = blockOffsets[1];
-                  Object.keys(normalizedCols).forEach(k => {
+                const baseMileageIdx = allMileageIndices[0];
+                
+                // 針對每個 block 建立 mapping
+                for (let i = 0; i < allMileageIndices.length; i++) {
+                  const currentMileageIdx = allMileageIndices[i];
+                  const mappingForThisBlock: Record<string, number> = {};
+                  
+                  // 對於每一個使用者指定的欄位
+                  Object.keys(rule.columns).forEach(k => {
                     const key = k as keyof MappingRule['columns'];
-                    const val = normalizedCols[key];
-                    if (val !== undefined) {
-                      normalizedCols[key] = val % blockWidth;
+                    const originalColIdx = rule.columns[key];
+                    if (originalColIdx === undefined) return;
+                    
+                    if (key === 'mileage') {
+                      mappingForThisBlock[key] = currentMileageIdx;
+                      return;
+                    }
+                    
+                    const expectedHeaderName = sanitizeHeader(headerRow[originalColIdx]);
+                    
+                    // 找出所有與 expectedHeaderName 相同的欄位索引
+                    const matchingIndices: number[] = [];
+                    for (let c = 0; c < headerRow.length; c++) {
+                      if (sanitizeHeader(headerRow[c]) === expectedHeaderName && expectedHeaderName !== '') {
+                        matchingIndices.push(c);
+                      }
+                    }
+                    
+                    if (matchingIndices.length === allMileageIndices.length) {
+                      // 1-to-1 對應：這個欄位在每個 block 都有出現
+                      mappingForThisBlock[key] = matchingIndices[i];
+                    } else if (matchingIndices.length > 0) {
+                      // 數量不符 (例如日期只有一欄)，若是只有一欄就共用
+                      if (matchingIndices.length === 1) {
+                        mappingForThisBlock[key] = matchingIndices[0];
+                      } else {
+                        // 有多個但數量對不上，依序取用，超出則拿最後一個
+                        mappingForThisBlock[key] = matchingIndices[i] !== undefined ? matchingIndices[i] : matchingIndices[matchingIndices.length - 1];
+                      }
+                    } else {
+                      // 找不到相同名稱，使用相對位置作為 Fallback
+                      const offset = currentMileageIdx - baseMileageIdx;
+                      mappingForThisBlock[key] = originalColIdx + offset;
                     }
                   });
+                  
+                  blockMappings.push(mappingForThisBlock);
                 }
               }
             }
+            
+            if (blockMappings.length === 0) {
+              // 找不到 mileage 或未設定，退回單一 block
+              const defaultMapping: Record<string, number> = {};
+              Object.keys(rule.columns).forEach(k => {
+                const key = k as keyof MappingRule['columns'];
+                if (rule.columns[key] !== undefined) {
+                   defaultMapping[key] = rule.columns[key]!;
+                }
+              });
+              blockMappings.push(defaultMapping);
+            }
+
+            const lastSeenRoute: Record<number, string> = {};
+            const lastSeenDirection: Record<number, string> = {};
+            const lastSeenLane: Record<number, string> = {};
 
             for (let r = rule.headerRowIndex + 1; r < rows.length; r++) {
               const row = rows[r];
               if (!row || row.length === 0) continue;
 
-              for (const offset of blockOffsets) {
-                const getCellRaw = (colIdx?: number) => colIdx !== undefined && colIdx + offset < row.length ? row[colIdx + offset] : '';
-                const getCellStr = (colIdx?: number) => String(getCellRaw(colIdx) ?? '').trim();
+              for (let bIdx = 0; bIdx < blockMappings.length; bIdx++) {
+                const blockCols = blockMappings[bIdx];
                 
-                const mileageRaw = getCellStr(normalizedCols.mileage);
+                const getCellRaw = (colKey: keyof MappingRule['columns']) => {
+                  const idx = blockCols[colKey];
+                  return idx !== undefined && idx < row.length ? row[idx] : '';
+                };
+                const getCellStr = (colKey: keyof MappingRule['columns']) => String(getCellRaw(colKey) ?? '').trim();
+                
+                const mileageRaw = getCellStr('mileage');
                 if (!mileageRaw) continue; // 里程是必備欄位，若此區塊為空則跳過
 
                 // 處理日期與時間
-                const rawDate = getCellRaw(normalizedCols.date);
+                const rawDate = getCellRaw('date');
                 const dt = normalizeDateTimeValue(rawDate);
                 const dateVal = dt.date || sheetGlobalDate || '';
                 
                 // 若有單獨的時間欄位，則優先使用，否則使用解析出來的時間
-                const timeColVal = getCellStr(normalizedCols.time);
+                const timeColVal = getCellStr('time');
                 let timeVal = timeColVal;
                 if (!timeVal) {
                     timeVal = dt.time;
                 }
 
-                // 其他維度資訊
-                const routeVal = getCellStr(normalizedCols.route) || sheetGlobalRoute || '';
-                let dirRaw = getCellStr(normalizedCols.direction) || sheetGlobalDirection || '';
+                // 更新與獲取 lastSeen
+                const routeCell = getCellStr('route');
+                if (routeCell) lastSeenRoute[bIdx] = routeCell;
+                
+                const dirCell = getCellStr('direction');
+                if (dirCell) lastSeenDirection[bIdx] = dirCell;
+                
+                const laneCell = getCellStr('lane');
+                if (laneCell) lastSeenLane[bIdx] = laneCell;
+
+                // 其他維度資訊 (優先順序: 當下/最後出現的值 > 全域設定 > 空)
+                const routeVal = lastSeenRoute[bIdx] || sheetGlobalRoute || '';
+                let dirRaw = lastSeenDirection[bIdx] || sheetGlobalDirection || '';
                 let directionVal = resolveDirection(dirRaw, routeVal);
-                let laneVal = getCellStr(normalizedCols.lane) || sheetGlobalLane || '';
+                let laneVal = lastSeenLane[bIdx] || sheetGlobalLane || '';
 
                 // 如果車道填的是 W2, E3 這類代碼，自動解析方向與車道
                 if (/^[NSEWnsew]\d+$/.test(laneVal)) {
@@ -512,8 +584,8 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 }
 
               if (type === 'iri') {
-                const iriRaw = getCellStr(normalizedCols.iri);
-                const prqiRaw = getCellStr(normalizedCols.prqi);
+                const iriRaw = getCellStr('iri');
+                const prqiRaw = getCellStr('prqi');
                 if (iriRaw && !isNaN(Number(iriRaw))) {
                   fileResults.push({
                     date: dateVal,
@@ -527,7 +599,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                   });
                 }
               } else if (type === 'sn') {
-                const snRaw = getCellStr(normalizedCols.sn);
+                const snRaw = getCellStr('sn');
                 if (snRaw && !isNaN(Number(snRaw))) {
                   fileResults.push({
                     date: dateVal,
@@ -539,7 +611,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                   });
                 }
               }
-            } // end of offset loop
+            } // end of block loop
           } // end of row loop
           });
           resolve(fileResults);
