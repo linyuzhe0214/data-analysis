@@ -86,15 +86,14 @@ export default function App() {
   };
 
   const data = useMemo(() => {
-    return rawData.map(d => {
-      let lane = normalizeLane(d.lane);
-                 
-      if (d.route.includes('4') && ['第二車道', '第三車道'].includes(lane)) {
-        return { ...d, lane: '第2及第3車道' };
-      }
-      return { ...d, lane };
-    });
+    return rawData.map(d => ({
+      ...d,
+      lane: normalizeLane(d.lane),
+    }));
   }, [rawData]);
+
+  // 合併車道模式：當選此值時，同時篩選第二+三車道
+  const MERGED_LANE_KEY = '第二+三車道 (合併)';
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
@@ -223,15 +222,15 @@ export default function App() {
 
   const availableLanes = useMemo(() => {
     const routeData = data.filter(d => d.route === selectedRoute);
-    const directionData = (selectedDirection === '雙向' || !selectedDirection) 
-      ? routeData 
+    const directionData = (selectedDirection === '雙向' || !selectedDirection)
+      ? routeData
       : routeData.filter(d => d.direction === selectedDirection);
-    
+
     const dataLanes = Array.from(new Set(directionData.map(d => d.lane))).filter(Boolean) as string[];
     const laneOrder = [
-      '內側車道', '第一車道', 
-      '中線車道', '第二車道', '第2及第3車道',
-      '外側車道', '第三車道', 
+      '內側車道', '第一車道',
+      '中線車道', '第二車道',
+      '外側車道', '第三車道',
       '第四車道', '第五車道'
     ];
     const sorted = dataLanes.sort((a, b) => {
@@ -240,7 +239,13 @@ export default function App() {
       if (idxA === -1 && idxB === -1) return a.localeCompare(b);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
     });
-    return ['全車道', ...sorted];
+
+    // 國4 且同時有第二、第三車道資料時，加入「合併」選項
+    const has2 = dataLanes.includes('第二車道');
+    const has3 = dataLanes.includes('第三車道');
+    const mergedOption = selectedRoute.includes('4') && has2 && has3 ? [MERGED_LANE_KEY] : [];
+
+    return ['全車道', ...sorted, ...mergedOption];
   }, [selectedRoute, selectedDirection, data]);
 
   // 所有日期（全部資料）
@@ -479,24 +484,31 @@ export default function App() {
     );
   }, [data, selectedRoute, selectedDirection, selectedDate, selectedLane]);
 
+  // 將選擇的車道轉為篩選 predicate（支援合併模式）
+  const laneFilter = (lane: string): boolean => {
+    if (selectedLane === '全車道' || !selectedLane) return true;
+    if (selectedLane === MERGED_LANE_KEY) return lane === '第二車道' || lane === '第三車道';
+    return lane === selectedLane;
+  };
+
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
-    
-    const routeData = data.filter(d => 
-      d.route === selectedRoute && 
+
+    const routeData = data.filter(d =>
+      d.route === selectedRoute &&
       (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection)
     );
-    
-    const iriData = selectedIriDate ? routeData.filter(d => 
-      d.date === selectedIriDate && 
-      d.iri > 0 && 
-      (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
+
+    const iriData = selectedIriDate ? routeData.filter(d =>
+      d.date === selectedIriDate &&
+      d.iri > 0 &&
+      laneFilter(d.lane)
     ) : [];
-    
-    const snData = selectedSnDate ? routeData.filter(d => 
-      d.date === selectedSnDate && 
-      d.sn > 0 && 
-      (selectedLane === '全車道' || !selectedLane || d.lane === selectedLane)
+
+    const snData = selectedSnDate ? routeData.filter(d =>
+      d.date === selectedSnDate &&
+      d.sn > 0 &&
+      laneFilter(d.lane)
     ) : [];
 
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
@@ -902,9 +914,9 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="iri" />
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="prqi" />
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} type="sn" />
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
+                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" />
                 </div>
               )
             )}

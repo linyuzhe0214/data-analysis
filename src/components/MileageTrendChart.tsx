@@ -17,12 +17,13 @@ interface MileageTrendChartProps {
   route: string;
   direction: string;
   lane: string;
+  mergedLaneKey?: string;
   type: 'iri' | 'sn' | 'prqi';
 }
 
 const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c', '#4ade80'];
 
-export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, lane, type }) => {
+export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, route, direction, lane, mergedLaneKey, type }) => {
   const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
 
   const handleLegendClick = (e: any) => {
@@ -38,14 +39,22 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
     });
   };
 
+  // 合併模式：將第二、第三車道各自發一條線，dataKey 格式為 "{date}_第二車道" / "{date}_第三車道"
+  const isMerged = !!(mergedLaneKey && lane === mergedLaneKey);
+
   const chartData = useMemo(() => {
-    const filtered = data.filter(d => 
-      d.route === route && 
+    const laneFilter = (d: PavementData): boolean => {
+      if (isMerged) return d.lane === '第二車道' || d.lane === '第三車道';
+      return !lane || d.lane === lane;
+    };
+
+    const filtered = data.filter(d =>
+      d.route === route &&
       d.direction === direction &&
-      (!lane || d.lane === lane) &&
+      laneFilter(d) &&
       (type === 'iri' ? d.iri > 0 : type === 'sn' ? d.sn > 0 : d.prqi > 0)
     );
-    
+
     const byMileage: Record<number, any> = {};
     const keysSet = new Set<string>();
 
@@ -53,8 +62,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
       if (!byMileage[d.mileage]) {
         byMileage[d.mileage] = { mileage: d.mileage };
       }
-      
-      const dataKey = d.date;
+      // 合併模式：dataKey = "{date}_{lane}" 讓第二、第三車道分兩條線
+      const dataKey = isMerged ? `${d.date}_${d.lane}` : d.date;
 
       if (!byMileage[d.mileage][dataKey]) {
         byMileage[d.mileage][dataKey] = { sum: 0, count: 0 };
@@ -74,14 +83,10 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
       return result;
     }).sort((a, b) => a.mileage - b.mileage);
 
-    // 對 keys 進行排序，先依年份排序
     const sortedKeys = Array.from(keysSet).sort((a, b) => a.localeCompare(b));
 
-    return {
-      data: processedData,
-      keys: sortedKeys
-    };
-  }, [data, route, direction, type, lane]);
+    return { data: processedData, keys: sortedKeys };
+  }, [data, route, direction, type, lane, isMerged]);
 
   if (chartData.data.length === 0) {
     return (
@@ -93,6 +98,14 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
 
   const title = type === 'iri' ? 'IRI 歷年變化趨勢' : type === 'sn' ? 'SN 歷年變化趨勢' : 'PRQI 歷年變化趨勢';
   const yAxisLabel = type === 'iri' ? 'IRI (m/km)' : type === 'sn' ? 'SN' : 'PRQI';
+  // 合併模式：legend name 顯示為 "{date} (第二/三車道)"
+  const formatLegendKey = (key: string) => {
+    if (isMerged) {
+      const [date, ...laneParts] = key.split('_');
+      return `${date} (${laneParts.join('_')})`;
+    }
+    return key;
+  };
 
   return (
     <div className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -147,12 +160,12 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ data, rout
             )}
 
             {chartData.keys.map((key, index) => (
-              <Line 
+              <Line
                 key={key}
-                type="monotone" 
-                dataKey={key} 
-                name={`${key}`} 
-                stroke={COLORS[index % COLORS.length]} 
+                type="monotone"
+                dataKey={key}
+                name={formatLegendKey(key)}
+                stroke={COLORS[index % COLORS.length]}
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 6 }}
