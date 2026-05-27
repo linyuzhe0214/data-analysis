@@ -380,26 +380,29 @@ export interface MappingRule {
   };
 }
 
-export const readExcelPreview = async (file: File): Promise<{ sheetName: string; data: string[][] }> => {
+export const readExcelPreview = async (file: File): Promise<{ sheets: { sheetName: string; data: string[][] }[] }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
         
-        const previewData = rows.slice(0, 30).map(row => row.map(cell => {
-          if (cell instanceof Date) {
-            // 只取日期部分供預覽
-            return cell.toISOString().split('T')[0];
-          }
-          return String(cell ?? '').trim();
-        }));
+        const sheets = workbook.SheetNames.map(sheetName => {
+          const worksheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+          
+          const previewData = rows.slice(0, 30).map(row => row.map(cell => {
+            if (cell instanceof Date) {
+              return cell.toISOString().split('T')[0];
+            }
+            return String(cell ?? '').trim();
+          }));
+          
+          return { sheetName, data: previewData };
+        });
         
-        resolve({ sheetName, data: previewData });
+        resolve({ sheets });
       } catch (err) {
         reject(err);
       }
@@ -588,6 +591,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 const prqiRaw = getCellStr('prqi');
                 if (iriRaw && !isNaN(Number(iriRaw))) {
                   fileResults.push({
+                    _sheetName: sheetName,
                     date: dateVal,
                     time: timeVal,
                     mileage: formatMileageIRI(mileageRaw),
@@ -602,6 +606,7 @@ export const parseWithMapping = async (files: FileList | File[], rule: MappingRu
                 const snRaw = getCellStr('sn');
                 if (snRaw && !isNaN(Number(snRaw))) {
                   fileResults.push({
+                    _sheetName: sheetName,
                     date: dateVal,
                     mileage: formatMileageSN(mileageRaw),
                     route: routeVal,

@@ -12,8 +12,8 @@ interface ImportWizardProps {
 export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfirm, onCancel }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [previewData, setPreviewData] = useState<string[][]>([]);
-  const [sheetName, setSheetName] = useState('');
+  const [sheets, setSheets] = useState<{sheetName: string; data: string[][] }[]>([]);
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [parsedPreview, setParsedPreview] = useState<any[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   
@@ -34,21 +34,23 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
     setLoading(true);
     readExcelPreview(files[0])
       .then(res => {
-        setPreviewData(res.data);
-        setSheetName(res.sheetName);
+        setSheets(res.sheets);
+        setActiveSheetIndex(0);
+        
+        const firstSheetData = res.sheets[0]?.data || [];
         
         // Auto guess header row (row with most columns)
         let maxCols = 0;
         let guessIndex = -1;
-        for (let i = 0; i < Math.min(10, res.data.length); i++) {
-          const validCols = res.data[i].filter(c => c.trim().length > 0).length;
+        for (let i = 0; i < Math.min(10, firstSheetData.length); i++) {
+          const validCols = firstSheetData[i].filter(c => c.trim().length > 0).length;
           if (validCols > maxCols && validCols >= (type === 'iri' ? 5 : 4)) {
             maxCols = validCols;
             guessIndex = i;
           }
         }
         if (guessIndex >= 0) {
-          handleSelectHeaderRow(guessIndex, res.data[guessIndex]);
+          handleSelectHeaderRow(guessIndex, firstSheetData[guessIndex]);
         }
       })
       .catch(err => setError(String(err)))
@@ -123,7 +125,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
     try {
       // 僅拿第一個檔案來試跑預覽
       const parsed = await parseWithMapping([files[0]], rule, type);
-      setParsedPreview(parsed.slice(0, 5)); // 只取前 5 筆
+      setParsedPreview(parsed); 
     } catch (err: any) {
       alert('解析失敗: ' + (err.message || err));
     } finally {
@@ -131,7 +133,8 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
     }
   };
 
-  const headerRow = headerRowIndex >= 0 ? previewData[headerRowIndex] : [];
+  const currentSheetData = sheets[activeSheetIndex]?.data || [];
+  const headerRow = headerRowIndex >= 0 ? currentSheetData[headerRowIndex] : [];
 
   const requiredFieldsMissing = useMemo(() => {
     if (headerRowIndex < 0) return true;
@@ -140,6 +143,17 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
     if (type === 'sn' && rule.columns.sn === undefined) return true;
     return false;
   }, [rule, headerRowIndex, type]);
+
+  const groupedParsedPreview = useMemo(() => {
+    if (!parsedPreview) return null;
+    const groups: Record<string, any[]> = {};
+    parsedPreview.forEach(row => {
+      const sn = row._sheetName || '未知工作表';
+      if (!groups[sn]) groups[sn] = [];
+      if (groups[sn].length < 3) groups[sn].push(row);
+    });
+    return groups;
+  }, [parsedPreview]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -230,7 +244,17 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
             <div className="flex-1 flex flex-col min-h-[300px]">
               <h3 className="text-base font-bold text-slate-800 mb-2 flex items-center justify-between">
                 <span>原始檔案預覽 ({files[0].name})</span>
-                {sheetName && <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">工作表: {sheetName}</span>}
+                {sheets.length > 0 && (
+                  <select 
+                    value={activeSheetIndex}
+                    onChange={(e) => setActiveSheetIndex(Number(e.target.value))}
+                    className="text-sm font-medium text-slate-700 bg-slate-100 px-3 py-1 rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {sheets.map((s, i) => (
+                      <option key={i} value={i}>工作表: {s.sheetName}</option>
+                    ))}
+                  </select>
+                )}
               </h3>
               <p className="text-sm text-slate-500 mb-4">請點擊標題列以指定表頭，系統將依此辨識資料結構。</p>
               
@@ -248,7 +272,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
                 ) : (
                   <table className="w-full text-sm text-left whitespace-nowrap">
                     <tbody>
-                      {previewData.map((row, rIdx) => {
+                      {currentSheetData.map((row, rIdx) => {
                         const isHeader = headerRowIndex === rIdx;
                         return (
                           <tr 
@@ -293,39 +317,50 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
             </div>
 
             {/* 區塊 2: 轉換後資料驗證 */}
-            {parsedPreview && (
+            {groupedParsedPreview && (
               <div className="flex flex-col border-t border-slate-200 pt-6">
                 <h3 className="text-base font-bold text-green-700 mb-2 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5" /> 準備寫入的資料預覽 (前 5 筆)
+                  <CheckCircle className="w-5 h-5" /> 準備寫入的資料預覽 (各工作表前 3 筆)
                 </h3>
                 <p className="text-sm text-slate-500 mb-4">確認欄位名稱與數值無誤後，即可正式寫入資料庫。</p>
                 
-                <div className="border border-green-200 rounded-xl overflow-auto bg-green-50 shadow-inner">
-                  {parsedPreview.length === 0 ? (
+                <div className="border border-green-200 rounded-xl overflow-auto bg-green-50 shadow-inner max-h-72">
+                  {Object.keys(groupedParsedPreview).length === 0 ? (
                     <div className="flex items-center justify-center h-24 text-slate-500 text-sm">
                       未能抓取到任何資料，請檢查必填欄位。
                     </div>
                   ) : (
-                    <table className="w-full text-sm text-left whitespace-nowrap">
-                      <thead className="bg-green-100 text-green-800 sticky top-0">
-                        <tr>
-                          <th className="p-2 border-b border-green-200 w-10 text-center">#</th>
-                          {Object.keys(parsedPreview[0]).map(k => (
-                            <th key={k} className="p-2 border-b border-green-200 font-bold">{k}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {parsedPreview.map((row, i) => (
-                          <tr key={i} className="border-b border-green-200/50 hover:bg-green-100/50 bg-white">
-                            <td className="p-2 border-r border-green-100 text-center text-slate-400">{i + 1}</td>
-                            {Object.values(row).map((val: any, j) => (
-                              <td key={j} className="p-2 border-r border-green-100 text-slate-700">{String(val)}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div className="flex flex-col divide-y divide-green-200">
+                      {Object.entries(groupedParsedPreview).map(([sheetName, rows]) => (
+                        <div key={sheetName} className="flex flex-col">
+                          <div className="bg-green-100/80 px-3 py-1.5 text-xs font-bold text-green-800 sticky left-0 uppercase tracking-wider">
+                            工作表: {sheetName}
+                          </div>
+                          <table className="w-full text-sm text-left whitespace-nowrap">
+                            <thead className="bg-green-50 text-green-800">
+                              <tr>
+                                <th className="p-2 border-b border-green-200 w-10 text-center text-xs">#</th>
+                                {Object.keys(rows[0] || {}).filter(k => k !== '_sheetName').map(k => (
+                                  <th key={k} className="p-2 border-b border-green-200 font-bold text-xs">{k}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row, i) => (
+                                <tr key={i} className="border-b border-green-200/50 hover:bg-green-100/50 bg-white transition-colors">
+                                  <td className="p-2 border-r border-green-100 text-center text-slate-400 font-mono">{i + 1}</td>
+                                  {Object.entries(row).filter(([k]) => k !== '_sheetName').map(([k, val]: [string, any], j) => (
+                                    <td key={j} className="p-2 border-r border-green-100 text-slate-700">
+                                      {String(val)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
