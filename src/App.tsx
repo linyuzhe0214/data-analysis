@@ -861,6 +861,7 @@ export default function App() {
                           </select>
                         </div>
                       </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-blue-600">
                             <Activity className="w-4 h-4" />
