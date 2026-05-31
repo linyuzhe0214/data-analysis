@@ -514,26 +514,54 @@ export default function App() {
     const avgIri = iriData.length > 0 ? iriData.reduce((acc, curr) => acc + curr.iri, 0) / iriData.length : 0;
     const avgSn = snData.length > 0 ? snData.reduce((acc, curr) => acc + curr.sn, 0) / snData.length : 0;
 
-    const pct175 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 1.75).length / iriData.length * 100) : 0;
-    const pct20 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.0).length / iriData.length * 100) : 0;
-    const pct25 = iriData.length > 0 ? (iriData.filter(d => d.iri >= 2.5).length / iriData.length * 100) : 0;
+    // IRI 級距統計（處數 + 百分比）
+    const n = iriData.length;
+    const iriB0 = iriData.filter(d => d.iri < 1.75).length;            // IRI < 1.75
+    const iriB1 = iriData.filter(d => d.iri >= 1.75 && d.iri < 2.0).length; // 1.75 ≤ IRI < 2.0
+    const iriB2 = iriData.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;  // 2.0 ≤ IRI < 2.5
+    const iriB3 = iriData.filter(d => d.iri >= 2.5).length;            // IRI ≥ 2.5
+    const pct = (c: number) => (n > 0 ? (c / n * 100).toFixed(1) : '0.0');
 
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
+    // 車道公里數：每個里程點 × 該里程實際出現的車道數
     const allStatsData = [...iriData, ...snData];
-    const mileages: number[] = Array.from(new Set<number>(allStatsData.map(d => d.mileage)));
-    const totalLength = mileages.length > 0 ? Math.max(...mileages) - Math.min(...mileages) : 0;
+    const mileageSet = Array.from(new Set<number>(allStatsData.map(d => d.mileage))).sort((a, b) => a - b);
+    // 統計每個里程點有幾個車道
+    let laneLengthKm = 0;
+    if (mileageSet.length >= 2) {
+      for (let i = 0; i < mileageSet.length - 1; i++) {
+        const m = mileageSet[i];
+        const segLen = mileageSet[i + 1] - m; // 下一個里程點之間的距離
+        const lanesAtM = new Set(allStatsData.filter(d => d.mileage === m).map(d => d.lane)).size;
+        laneLengthKm += segLen * (lanesAtM || 1);
+      }
+      // 補最後一個里程點
+      const lastM = mileageSet[mileageSet.length - 1];
+      const lanesAtLast = new Set(allStatsData.filter(d => d.mileage === lastM).map(d => d.lane)).size;
+      // 最後一段用倒數第二段的間距估算
+      const lastSeg = mileageSet.length >= 2 ? mileageSet[mileageSet.length - 1] - mileageSet[mileageSet.length - 2] : 0;
+      laneLengthKm += lastSeg * (lanesAtLast || 1);
+    }
 
     const isMergedLane = selectedLane === MERGED_LANE_KEY;
 
     return {
       avgIri: isMergedLane ? '0' : avgIri.toFixed(2),
       avgSn: avgSn.toFixed(1),
-      pct175: isMergedLane ? '0' : pct175.toFixed(1),
-      pct20: isMergedLane ? '0' : pct20.toFixed(1),
-      pct25: isMergedLane ? '0' : pct25.toFixed(1),
+      iriBands: isMergedLane
+        ? [
+            { label: '1.75 ≤ IRI < 2.0',   count: 0, pct: '0.0', color: 'text-yellow-600' },
+            { label: '2.0 ≤ IRI < 2.5',    count: 0, pct: '0.0', color: 'text-orange-600' },
+            { label: 'IRI ≥ 2.5',          count: 0, pct: '0.0', color: 'text-red-600' },
+          ]
+        : [
+            { label: '1.75 ≤ IRI < 2.0',   count: iriB1, pct: pct(iriB1), color: 'text-yellow-600' },
+            { label: '2.0 ≤ IRI < 2.5',    count: iriB2, pct: pct(iriB2), color: 'text-orange-600' },
+            { label: 'IRI ≥ 2.5',          count: iriB3, pct: pct(iriB3), color: 'text-red-600' },
+          ],
       countSn35,
-      totalLength: totalLength.toFixed(1),
+      laneLengthKm: laneLengthKm.toFixed(2),
       iriDate: selectedIriDate,
       snDate: selectedSnDate
     };
@@ -861,7 +889,8 @@ export default function App() {
                           </select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+                        {/* 平均 IRI */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-blue-600">
                             <Activity className="w-4 h-4" />
@@ -870,27 +899,18 @@ export default function App() {
                           <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
                           {stats.iriDate && <span className="text-[10px] text-slate-400 mt-1">{stats.iriDate} 檢測</span>}
                         </div>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-yellow-600">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-xs font-medium">IRI ≥ 1.75</span>
+                        {/* IRI 四個級距卡片 */}
+                        {stats.iriBands.map((band) => (
+                          <div key={band.label} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
+                            <div className={`flex items-center gap-2 ${band.color}`}>
+                              <AlertTriangle className="w-4 h-4" />
+                              <span className="text-xs font-medium">{band.label}</span>
+                            </div>
+                            <p className="text-xl font-bold text-slate-800">{band.count} 處</p>
+                            <span className="text-[11px] text-slate-400">{band.pct}%</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.pct175}%</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-orange-600">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-xs font-medium">IRI ≥ 2.0</span>
-                          </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.pct20}%</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-red-600">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-xs font-medium">IRI ≥ 2.5</span>
-                          </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.pct25}%</p>
-                        </div>
+                        ))}
+                        {/* 平均 SN */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-purple-600">
                             <Activity className="w-4 h-4" />
@@ -899,6 +919,7 @@ export default function App() {
                           <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
                           {stats.snDate && <span className="text-[10px] text-slate-400 mt-1">{stats.snDate} 檢測</span>}
                         </div>
+                        {/* SN < 35 */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-red-600">
                             <AlertTriangle className="w-4 h-4" />
@@ -906,12 +927,14 @@ export default function App() {
                           </div>
                           <p className="text-xl font-bold text-slate-800">{stats.countSn35} 處</p>
                         </div>
+                        {/* 分析車道公里數 */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                           <div className="flex items-center gap-2 text-green-600">
                             <CheckCircle className="w-4 h-4" />
-                            <span className="text-xs font-medium">分析長度</span>
+                            <span className="text-xs font-medium">分析車道公里</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.totalLength} km</p>
+                          <p className="text-xl font-bold text-slate-800">{stats.laneLengthKm}</p>
+                          <span className="text-[11px] text-slate-400">車道公里</span>
                         </div>
                       </div>
                     </div>
