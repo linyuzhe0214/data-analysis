@@ -524,25 +524,30 @@ export default function App() {
 
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
-    // 車道公里數：每個里程點 × 該里程實際出現的車道數
+    // 車道公里數：按方向分組，各方向獨立計算後加總
+    // 避免雙向時「第一車道」在南下/北上被視為同一條而少算
     const allStatsData = [...iriData, ...snData];
-    const mileageSet = Array.from(new Set<number>(allStatsData.map(d => d.mileage))).sort((a, b) => a - b);
-    // 統計每個里程點有幾個車道
-    let laneLengthKm = 0;
-    if (mileageSet.length >= 2) {
-      for (let i = 0; i < mileageSet.length - 1; i++) {
-        const m = mileageSet[i];
-        const segLen = mileageSet[i + 1] - m; // 下一個里程點之間的距離
-        const lanesAtM = new Set(allStatsData.filter(d => d.mileage === m).map(d => d.lane)).size;
-        laneLengthKm += segLen * (lanesAtM || 1);
+    const directions = Array.from(new Set(allStatsData.map(d => d.direction)));
+
+    const calcLaneKmForGroup = (group: typeof allStatsData) => {
+      const ms = Array.from(new Set<number>(group.map(d => d.mileage))).sort((a, b) => a - b);
+      if (ms.length < 2) return 0;
+      let km = 0;
+      for (let i = 0; i < ms.length - 1; i++) {
+        const segLen = ms[i + 1] - ms[i];
+        const lanesAtM = new Set(group.filter(d => d.mileage === ms[i]).map(d => d.lane)).size;
+        km += segLen * (lanesAtM || 1);
       }
-      // 補最後一個里程點
-      const lastM = mileageSet[mileageSet.length - 1];
-      const lanesAtLast = new Set(allStatsData.filter(d => d.mileage === lastM).map(d => d.lane)).size;
-      // 最後一段用倒數第二段的間距估算
-      const lastSeg = mileageSet.length >= 2 ? mileageSet[mileageSet.length - 1] - mileageSet[mileageSet.length - 2] : 0;
-      laneLengthKm += lastSeg * (lanesAtLast || 1);
-    }
+      // 最後一個里程點用倒數第二段間距估算
+      const lastSeg = ms[ms.length - 1] - ms[ms.length - 2];
+      const lanesAtLast = new Set(group.filter(d => d.mileage === ms[ms.length - 1]).map(d => d.lane)).size;
+      km += lastSeg * (lanesAtLast || 1);
+      return km;
+    };
+
+    const laneLengthKm = directions.reduce((sum, dir) => {
+      return sum + calcLaneKmForGroup(allStatsData.filter(d => d.direction === dir));
+    }, 0);
 
     const isMergedLane = selectedLane === MERGED_LANE_KEY;
 
