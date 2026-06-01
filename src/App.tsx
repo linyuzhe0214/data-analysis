@@ -906,8 +906,10 @@ export default function App() {
                               <AlertTriangle className="w-4 h-4" />
                               <span className="text-xs font-medium">{band.label}</span>
                             </div>
-                            <p className="text-xl font-bold text-slate-800">{band.count} 處</p>
-                            <span className="text-[11px] text-slate-400">{band.pct}%</span>
+                            <p className="text-xl font-bold text-slate-800">
+                              {band.count} 處
+                              <span className="text-sm font-medium text-slate-400 ml-1">/ {band.pct}%</span>
+                            </p>
                           </div>
                         ))}
                         {/* 平均 SN */}
