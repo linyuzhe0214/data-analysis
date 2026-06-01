@@ -909,7 +909,7 @@ export default function App() {
                           <div key={band.label} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
                             <div className={`flex items-center gap-2 ${band.color}`}>
                               <AlertTriangle className="w-4 h-4" />
-                              <span className="text-xs font-medium">{band.label}</span>
+                              <span className="text-xs font-medium whitespace-nowrap">{band.label}</span>
                             </div>
                             <p className="text-xl font-bold text-slate-800">
                               {band.count} 處
