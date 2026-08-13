@@ -67,14 +67,25 @@ export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult
 
 export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res = await fetch(`${GAS_URL}?type=all`);
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error || '無法取得雲端資料');
+  try {
+    const res = await fetch(`${GAS_URL}?type=all`);
+    const json = await res.json();
+    if (json.success && (json.sn || json.iri)) {
+      return {
+        sn: parseRowsToObjects<RawSnData>(json.sn),
+        iri: parseRowsToObjects<RawIriData>(json.iri),
+      };
+    }
+  } catch (err) {
+    console.warn('[gasService] fetchAllData (type=all) 失敗，切換至舊版相容模式', err);
+  }
 
-  return {
-    sn: parseRowsToObjects<RawSnData>(json.sn),
-    iri: parseRowsToObjects<RawIriData>(json.iri),
-  };
+  // 舊版或未部署 type=all 之相容回退機制：發起獨立請求
+  const [sn, iri] = await Promise.all([
+    fetchSNData().catch(() => []),
+    fetchIRIData().catch(() => [])
+  ]);
+  return { sn, iri };
 };
 
 export const fetchSNData = async (): Promise<RawSnData[]> => {
