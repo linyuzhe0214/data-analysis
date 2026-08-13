@@ -107,56 +107,70 @@ export default function App() {
   const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
   const [showExportWizard, setShowExportWizard] = useState(false);
 
+  // 共用轉換工具
+  const normalizeDateStr = (raw: any): string => {
+    if (!raw) return new Date().toISOString().split('T')[0];
+    let s = String(raw).trim();
+    if (s.includes('T') && s.endsWith('Z')) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        s = `${y}-${m}-${day}`;
+      } else {
+        s = s.split('T')[0];
+      }
+    } else if (s.includes('T')) {
+      s = s.split('T')[0];
+    }
+    if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+    s = s.replace(/[\/\.]/g, '-');
+    const parts = s.split('-');
+    if (parts.length === 3) {
+      parts[1] = parts[1].padStart(2, '0');
+      parts[2] = parts[2].padStart(2, '0');
+      s = parts.join('-');
+    }
+    return s;
+  };
+
+  const parseMileageToNumber = (raw: any): number => {
+    if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
+    const str = String(raw || '');
+    const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
+    if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
+  };
+
   // 從雲端資料庫同步（可手動觸發）
   const syncFromDB = async () => {
     if (!GAS_URL) return;
     setIsSyncing(true);
-    try {
-      const [snRaw, iriRaw] = await Promise.all([
-        fetchSNData().catch(() => [] as any[]),
-        fetchIRIData().catch(() => [] as any[])
-      ]);
-      
-      const normalizeDateStr = (raw: any): string => {
-        if (!raw) return new Date().toISOString().split('T')[0];
-        let s = String(raw).trim();
-        if (s.includes('T') && s.endsWith('Z')) {
-           const d = new Date(s);
-           if (!isNaN(d.getTime())) {
-               const y = d.getFullYear();
-               const m = String(d.getMonth() + 1).padStart(2, '0');
-               const day = String(d.getDate()).padStart(2, '0');
-               s = `${y}-${m}-${day}`;
-           } else {
-               s = s.split('T')[0];
-           }
-        } else if (s.includes('T')) {
-            s = s.split('T')[0];
-        }
-        if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-        s = s.replace(/[\/\.]/g, '-');
-        const parts = s.split('-');
-        if (parts.length === 3) {
-            parts[1] = parts[1].padStart(2, '0');
-            parts[2] = parts[2].padStart(2, '0');
-            s = parts.join('-');
-        }
-        return s;
-      };
-      
-      const parseMileageToNumber = (raw: any): number => {
-        if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
-        const str = String(raw || '');
-        const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
-        if (match) return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
-      };
 
-      const newPavementData: PavementData[] = [];
+    // SN / IRI 各自獨立，互不影響
+    // 用 ref 追蹤兩邊完成狀態，都完成才關 spinner
+    let snDone = false;
+    let iriDone = false;
+    const maybeFinish = () => { if (snDone && iriDone) setIsSyncing(false); };
 
-      snRaw.forEach(p => {
-        newPavementData.push({
+    // 先清快取、等兩邊都有資料再一次寫入，避免先到先清掉另一半
+    // 策略：各自抓完後合併進 ref，最後一起 commit
+    const gathered: { sn: PavementData[]; iri: PavementData[] } = { sn: [], iri: [] };
+
+    const commit = () => {
+      const merged = [...gathered.sn, ...gathered.iri];
+      if (merged.length > 0) {
+        localStorage.removeItem(LS_KEY);
+        setDataPersist(merged);
+      }
+    };
+
+    // SN
+    fetchSNData()
+      .then(snRaw => {
+        gathered.sn = snRaw.map(p => ({
           date: normalizeDateStr(p.date),
           route: p.route || '未知路線',
           direction: p.direction || '未知方向',
@@ -164,12 +178,20 @@ export default function App() {
           mileage: parseMileageToNumber(p.mileage),
           iri: 0,
           sn: p.sn ? Number(p.sn) : 0,
-          prqi: 0
-        });
+          prqi: 0,
+        }));
+      })
+      .catch(e => console.warn('[sync] SN 失敗，保留舊資料', e))
+      .finally(() => {
+        snDone = true;
+        if (iriDone) commit(); // 兩邊都到了才寫
+        maybeFinish();
       });
 
-      iriRaw.forEach(p => {
-        newPavementData.push({
+    // IRI
+    fetchIRIData()
+      .then(iriRaw => {
+        gathered.iri = iriRaw.map(p => ({
           date: normalizeDateStr(p.date),
           route: p.route || '未知路線',
           direction: p.direction || '未知方向',
@@ -177,20 +199,15 @@ export default function App() {
           mileage: parseMileageToNumber(p.mileage),
           iri: p.avgIri ? Number(p.avgIri) : 0,
           sn: 0,
-          prqi: p.avgPrqi ? Number(p.avgPrqi) : 0
-        });
+          prqi: p.avgPrqi ? Number(p.avgPrqi) : 0,
+        }));
+      })
+      .catch(e => console.warn('[sync] IRI 失敗，保留舊資料', e))
+      .finally(() => {
+        iriDone = true;
+        if (snDone) commit(); // 兩邊都到了才寫
+        maybeFinish();
       });
-
-      if (newPavementData.length > 0) {
-        // 強制清除舊快取，用資料庫資料完全覆寫
-        localStorage.removeItem(LS_KEY);
-        setDataPersist(newPavementData);
-      }
-    } catch (e) {
-      console.error('Failed to auto-sync from DB:', e);
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   // 網頁載入時自動從雲端資料庫同步
@@ -356,45 +373,6 @@ export default function App() {
 
     // 2. 批次分塊上傳階段 (Batch Chunking)
     if (allParsed.length > 0) {
-      
-      const parseMileageToNumber = (raw: any): number => {
-        if (typeof raw === 'number') return raw > 1000 ? raw / 1000 : raw;
-        const str = String(raw || '');
-        // 處理 "166k+500" 或 "166+500"
-        const match = str.match(/(\d+)[kK\+]?\+?(\d+)/);
-        if (match) {
-          return parseInt(match[1], 10) + parseInt(match[2], 10) / 1000;
-        }
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : (num > 1000 ? num / 1000 : num);
-      };
-
-      const normalizeDateStr = (raw: any): string => {
-        if (!raw) return new Date().toISOString().split('T')[0];
-        let s = String(raw).trim();
-        if (s.includes('T') && s.endsWith('Z')) {
-           const d = new Date(s);
-           if (!isNaN(d.getTime())) {
-               const y = d.getFullYear();
-               const m = String(d.getMonth() + 1).padStart(2, '0');
-               const day = String(d.getDate()).padStart(2, '0');
-               s = `${y}-${m}-${day}`;
-           } else {
-               s = s.split('T')[0];
-           }
-        } else if (s.includes('T')) {
-            s = s.split('T')[0];
-        }
-        if (/^20\d{6}$/.test(s)) s = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-        s = s.replace(/[\/\.]/g, '-');
-        const parts = s.split('-');
-        if (parts.length === 3) {
-            parts[1] = parts[1].padStart(2, '0');
-            parts[2] = parts[2].padStart(2, '0');
-            s = parts.join('-');
-        }
-        return s;
-      };
 
       // 無論有沒有 GAS，先把資料更新到本地儀表板
       const mappedToPavementData = allParsed.map(p => ({

@@ -77,6 +77,9 @@ function doPost(e) {
       });
     }
 
+    // 寫入後清除該類型的 cache，讓下次同步拿到最新資料
+    try { CacheService.getScriptCache().remove('data_' + type); } catch(_) {}
+
     return jsonResponse({ success: true, inserted: records.length });
   } catch (err) {
     return jsonResponse({ success: false, error: String(err) });
@@ -86,9 +89,16 @@ function doPost(e) {
 function doGet(e) {
   try {
     const type = (e.parameter.type || '').toLowerCase();
+    const cache = CacheService.getScriptCache();
+    const CACHE_TTL = 21600; // 6 小時（GAS 上限）
 
     if (type === 'sn') {
-      // 掃描所有 SN_ 開頭的工作表（包含原本的 SN_Data 或 SN_國道X號），合併回傳
+      // 先查 cache
+      const cached = cache.get('data_sn');
+      if (cached) {
+        return jsonResponse({ success: true, data: JSON.parse(cached), cached: true });
+      }
+
       const ss     = SpreadsheetApp.openById(SS_ID);
       const sheets = ss.getSheets().filter(function(s) {
         return s.getName().indexOf('SN_') === 0;
@@ -99,10 +109,21 @@ function doGet(e) {
         allData = allData.concat(readSheetObj(sheet, SN_HEADERS));
       });
 
+      // 寫 cache（資料超過 100KB 就不 cache，避免 GAS 限制）
+      try {
+        var json = JSON.stringify(allData);
+        if (json.length < 100000) cache.put('data_sn', json, CACHE_TTL);
+      } catch(_) {}
+
       return jsonResponse({ success: true, data: allData });
 
     } else if (type === 'iri') {
-      // 掃描所有 IRI_ 開頭的工作表，合併回傳
+      // 先查 cache
+      const cached = cache.get('data_iri');
+      if (cached) {
+        return jsonResponse({ success: true, data: JSON.parse(cached), cached: true });
+      }
+
       const ss     = SpreadsheetApp.openById(SS_ID);
       const sheets = ss.getSheets().filter(function(s) {
         return s.getName().indexOf('IRI_') === 0;
@@ -112,6 +133,12 @@ function doGet(e) {
       sheets.forEach(function(sheet) {
         allData = allData.concat(readSheetObj(sheet, IRI_HEADERS));
       });
+
+      // 寫 cache
+      try {
+        var json = JSON.stringify(allData);
+        if (json.length < 100000) cache.put('data_iri', json, CACHE_TTL);
+      } catch(_) {}
 
       return jsonResponse({ success: true, data: allData });
 
