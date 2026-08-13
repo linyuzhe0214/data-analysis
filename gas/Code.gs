@@ -78,7 +78,11 @@ function doPost(e) {
     }
 
     // 寫入後清除該類型的 cache，讓下次同步拿到最新資料
-    try { CacheService.getScriptCache().remove('data_' + type); } catch(_) {}
+    try {
+      clearLargeCache('data_sn');
+      clearLargeCache('data_iri');
+      clearLargeCache('data_all');
+    } catch(_) {}
 
     return jsonResponse({ success: true, inserted: records.length });
   } catch (err) {
@@ -89,14 +93,41 @@ function doPost(e) {
 function doGet(e) {
   try {
     const type = (e.parameter.type || '').toLowerCase();
-    const cache = CacheService.getScriptCache();
-    const CACHE_TTL = 21600; // 6 小時（GAS 上限）
 
-    if (type === 'sn') {
-      // 先查 cache
-      const cached = cache.get('data_sn');
+    if (type === 'all') {
+      const cached = getLargeCache('data_all');
       if (cached) {
-        return jsonResponse({ success: true, data: JSON.parse(cached), cached: true });
+        return jsonResponse({ success: true, ...cached, cached: true });
+      }
+
+      const ss = SpreadsheetApp.openById(SS_ID);
+      const allSheets = ss.getSheets();
+
+      var snRows = [];
+      var iriRows = [];
+
+      allSheets.forEach(function(sheet) {
+        var name = sheet.getName();
+        if (name.indexOf('SN_') === 0) {
+          snRows = snRows.concat(readSheetRawRows(sheet));
+        } else if (name.indexOf('IRI_') === 0) {
+          iriRows = iriRows.concat(readSheetRawRows(sheet));
+        }
+      });
+
+      var result = {
+        sn: { headers: SN_HEADERS, rows: snRows },
+        iri: { headers: IRI_HEADERS, rows: iriRows }
+      };
+
+      setLargeCache('data_all', result);
+      return jsonResponse({ success: true, ...result });
+
+    } else if (type === 'sn') {
+      // 先查 cache
+      const cached = getLargeCache('data_sn');
+      if (cached) {
+        return jsonResponse({ success: true, data: cached, cached: true });
       }
 
       const ss     = SpreadsheetApp.openById(SS_ID);
@@ -109,19 +140,14 @@ function doGet(e) {
         allData = allData.concat(readSheetObj(sheet, SN_HEADERS));
       });
 
-      // 寫 cache（資料超過 100KB 就不 cache，避免 GAS 限制）
-      try {
-        var json = JSON.stringify(allData);
-        if (json.length < 100000) cache.put('data_sn', json, CACHE_TTL);
-      } catch(_) {}
-
+      setLargeCache('data_sn', allData);
       return jsonResponse({ success: true, data: allData });
 
     } else if (type === 'iri') {
       // 先查 cache
-      const cached = cache.get('data_iri');
+      const cached = getLargeCache('data_iri');
       if (cached) {
-        return jsonResponse({ success: true, data: JSON.parse(cached), cached: true });
+        return jsonResponse({ success: true, data: cached, cached: true });
       }
 
       const ss     = SpreadsheetApp.openById(SS_ID);
@@ -134,12 +160,7 @@ function doGet(e) {
         allData = allData.concat(readSheetObj(sheet, IRI_HEADERS));
       });
 
-      // 寫 cache
-      try {
-        var json = JSON.stringify(allData);
-        if (json.length < 100000) cache.put('data_iri', json, CACHE_TTL);
-      } catch(_) {}
-
+      setLargeCache('data_iri', allData);
       return jsonResponse({ success: true, data: allData });
 
     } else if (type === 'iri_sheets') {
@@ -151,7 +172,7 @@ function doGet(e) {
       return jsonResponse({ success: true, sheets: names });
     }
 
-    return jsonResponse({ success: false, error: 'type=sn|iri|iri_sheets required' });
+    return jsonResponse({ success: false, error: 'type=all|sn|iri|iri_sheets required' });
   } catch (err) {
     return jsonResponse({ success: false, error: String(err) });
   }
@@ -229,6 +250,12 @@ function readSheet(sheetName, headers) {
   return readSheetObj(sheet, headers);
 }
 
+function readSheetRawRows(sheet) {
+  const vals = sheet.getDataRange().getValues();
+  if (vals.length < 2) return [];
+  return vals.slice(1);
+}
+
 function readSheetObj(sheet, headers) {
   const vals = sheet.getDataRange().getValues();
   if (vals.length < 2) return [];
@@ -238,6 +265,62 @@ function readSheetObj(sheet, headers) {
     headers.forEach(function(h, i) { obj[h] = row[i]; });
     return obj;
   });
+}
+
+function setLargeCache(key, dataObj, ttl) {
+  var cache = CacheService.getScriptCache();
+  var json = JSON.stringify(dataObj);
+  var chunkSize = 90000;
+  var count = Math.ceil(json.length / chunkSize);
+  var cacheObj = {};
+  cacheObj[key + '_count'] = String(count);
+  for (var i = 0; i < count; i++) {
+    cacheObj[key + '_' + i] = json.slice(i * chunkSize, (i + 1) * chunkSize);
+  }
+  try {
+    cache.putAll(cacheObj, ttl || 21600);
+  } catch (e) {
+    console.warn('Cache put failed', e);
+  }
+}
+
+function getLargeCache(key) {
+  var cache = CacheService.getScriptCache();
+  var countStr = cache.get(key + '_count');
+  if (!countStr) return null;
+  var count = parseInt(countStr, 10);
+  var keys = [];
+  for (var i = 0; i < count; i++) {
+    keys.push(key + '_' + i);
+  }
+  var chunks = cache.getAll(keys);
+  var json = '';
+  for (var i = 0; i < count; i++) {
+    var chunk = chunks[key + '_' + i];
+    if (!chunk) return null;
+    json += chunk;
+  }
+  try {
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearLargeCache(key) {
+  var cache = CacheService.getScriptCache();
+  try {
+    var countStr = cache.get(key + '_count');
+    if (countStr) {
+      var count = parseInt(countStr, 10);
+      var keys = [key + '_count'];
+      for (var i = 0; i < count; i++) {
+        keys.push(key + '_' + i);
+      }
+      cache.removeAll(keys);
+    }
+    cache.remove(key);
+  } catch (_) {}
 }
 
 function jsonResponse(obj) {

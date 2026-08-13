@@ -35,6 +35,22 @@ async function postCsv(url: string, csv: string): Promise<void> {
   // no-cors 回傳 opaque response，無法判斷成功與否，視為已送出
 }
 
+function parseRowsToObjects<T>(data: any): T[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data as T[];
+  if (data.headers && Array.isArray(data.rows)) {
+    const headers: string[] = data.headers;
+    return data.rows.map((row: any[]) => {
+      const obj: Record<string, any> = {};
+      headers.forEach((h, idx) => {
+        obj[h] = row[idx] !== undefined ? row[idx] : '';
+      });
+      return obj as T;
+    });
+  }
+  return [];
+}
+
 export const uploadSNData = async (records: RawSnData[]): Promise<UploadResult> => {
   if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
   const SN_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
@@ -49,12 +65,24 @@ export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult
   return { success: true, inserted: records.length };
 };
 
+export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
+  if (!GAS_URL) throw new Error('GAS URL 未設定');
+  const res = await fetch(`${GAS_URL}?type=all`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || '無法取得雲端資料');
+
+  return {
+    sn: parseRowsToObjects<RawSnData>(json.sn),
+    iri: parseRowsToObjects<RawIriData>(json.iri),
+  };
+};
+
 export const fetchSNData = async (): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
   const res  = await fetch(`${GAS_URL}?type=sn`);
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
-  return json.data as RawSnData[];
+  return parseRowsToObjects<RawSnData>(json.data);
 };
 
 export const fetchIRIData = async (): Promise<RawIriData[]> => {
@@ -62,5 +90,5 @@ export const fetchIRIData = async (): Promise<RawIriData[]> => {
   const res  = await fetch(`${GAS_URL}?type=iri`);
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
-  return json.data as RawIriData[];
+  return parseRowsToObjects<RawIriData>(json.data);
 };

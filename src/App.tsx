@@ -6,7 +6,7 @@ import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
 import { ExportWizard } from './components/ExportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
-import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, GAS_URL } from './lib/gasService';
+import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, fetchAllData, GAS_URL } from './lib/gasService';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 
@@ -149,65 +149,40 @@ export default function App() {
     if (!GAS_URL) return;
     setIsSyncing(true);
 
-    // SN / IRI 各自獨立，互不影響
-    // 用 ref 追蹤兩邊完成狀態，都完成才關 spinner
-    let snDone = false;
-    let iriDone = false;
-    const maybeFinish = () => { if (snDone && iriDone) setIsSyncing(false); };
+    try {
+      const { sn: snRaw, iri: iriRaw } = await fetchAllData();
+      const snData: PavementData[] = snRaw.map(p => ({
+        date: normalizeDateStr(p.date),
+        route: p.route || '未知路線',
+        direction: p.direction || '未知方向',
+        lane: normalizeLane(p.lane),
+        mileage: parseMileageToNumber(p.mileage),
+        iri: 0,
+        sn: p.sn ? Number(p.sn) : 0,
+        prqi: 0,
+      }));
 
-    // 先清快取、等兩邊都有資料再一次寫入，避免先到先清掉另一半
-    // 策略：各自抓完後合併進 ref，最後一起 commit
-    const gathered: { sn: PavementData[]; iri: PavementData[] } = { sn: [], iri: [] };
+      const iriData: PavementData[] = iriRaw.map(p => ({
+        date: normalizeDateStr(p.date),
+        route: p.route || '未知路線',
+        direction: p.direction || '未知方向',
+        lane: normalizeLane(p.lane),
+        mileage: parseMileageToNumber(p.mileage),
+        iri: p.avgIri ? Number(p.avgIri) : 0,
+        sn: 0,
+        prqi: p.avgPrqi ? Number(p.avgPrqi) : 0,
+      }));
 
-    const commit = () => {
-      const merged = [...gathered.sn, ...gathered.iri];
+      const merged = [...snData, ...iriData];
       if (merged.length > 0) {
         localStorage.removeItem(LS_KEY);
         setDataPersist(merged);
       }
-    };
-
-    // SN
-    fetchSNData()
-      .then(snRaw => {
-        gathered.sn = snRaw.map(p => ({
-          date: normalizeDateStr(p.date),
-          route: p.route || '未知路線',
-          direction: p.direction || '未知方向',
-          lane: normalizeLane(p.lane),
-          mileage: parseMileageToNumber(p.mileage),
-          iri: 0,
-          sn: p.sn ? Number(p.sn) : 0,
-          prqi: 0,
-        }));
-      })
-      .catch(e => console.warn('[sync] SN 失敗，保留舊資料', e))
-      .finally(() => {
-        snDone = true;
-        if (iriDone) commit(); // 兩邊都到了才寫
-        maybeFinish();
-      });
-
-    // IRI
-    fetchIRIData()
-      .then(iriRaw => {
-        gathered.iri = iriRaw.map(p => ({
-          date: normalizeDateStr(p.date),
-          route: p.route || '未知路線',
-          direction: p.direction || '未知方向',
-          lane: normalizeLane(p.lane),
-          mileage: parseMileageToNumber(p.mileage),
-          iri: p.avgIri ? Number(p.avgIri) : 0,
-          sn: 0,
-          prqi: p.avgPrqi ? Number(p.avgPrqi) : 0,
-        }));
-      })
-      .catch(e => console.warn('[sync] IRI 失敗，保留舊資料', e))
-      .finally(() => {
-        iriDone = true;
-        if (snDone) commit(); // 兩邊都到了才寫
-        maybeFinish();
-      });
+    } catch (e) {
+      console.warn('[sync] 雲端同步失敗，保留舊資料', e);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // 網頁載入時自動從雲端資料庫同步
