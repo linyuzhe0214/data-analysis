@@ -174,10 +174,8 @@ export default function App() {
       }));
 
       const merged = [...snData, ...iriData];
-      if (merged.length > 0) {
-        localStorage.removeItem(LS_KEY);
-        setDataPersist(merged);
-      }
+      localStorage.removeItem(LS_KEY);
+      setDataPersist(merged);
     } catch (e) {
       console.warn('[sync] 雲端同步失敗，保留舊資料', e);
     } finally {

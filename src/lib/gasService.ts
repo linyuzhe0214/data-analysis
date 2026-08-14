@@ -68,7 +68,7 @@ export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult
 export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
   try {
-    const res = await fetch(`${GAS_URL}?type=all`);
+    const res = await fetch(`${GAS_URL}?type=all&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
     const json = await res.json();
     if (json.success && (json.sn || json.iri)) {
       return {
@@ -90,7 +90,7 @@ export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData
 
 export const fetchSNData = async (): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(`${GAS_URL}?type=sn`);
+  const res  = await fetch(`${GAS_URL}?type=sn&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawSnData>(json.data);
@@ -98,7 +98,7 @@ export const fetchSNData = async (): Promise<RawSnData[]> => {
 
 export const fetchIRIData = async (): Promise<RawIriData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(`${GAS_URL}?type=iri`);
+  const res  = await fetch(`${GAS_URL}?type=iri&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawIriData>(json.data);

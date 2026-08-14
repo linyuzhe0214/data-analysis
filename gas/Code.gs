@@ -93,11 +93,14 @@ function doPost(e) {
 function doGet(e) {
   try {
     const type = (e.parameter.type || '').toLowerCase();
+    const nocache = e.parameter.nocache === '1' || e.parameter.nocache === 'true';
 
     if (type === 'all') {
-      const cached = getLargeCache('data_all');
-      if (cached) {
-        return jsonResponse({ success: true, ...cached, cached: true });
+      if (!nocache) {
+        const cached = getLargeCache('data_all');
+        if (cached) {
+          return jsonResponse({ success: true, ...cached, cached: true });
+        }
       }
 
       const ss = SpreadsheetApp.openById(SS_ID);
@@ -124,10 +127,11 @@ function doGet(e) {
       return jsonResponse({ success: true, ...result });
 
     } else if (type === 'sn') {
-      // 先查 cache
-      const cached = getLargeCache('data_sn');
-      if (cached) {
-        return jsonResponse({ success: true, data: cached, cached: true });
+      if (!nocache) {
+        const cached = getLargeCache('data_sn');
+        if (cached) {
+          return jsonResponse({ success: true, data: cached, cached: true });
+        }
       }
 
       const ss     = SpreadsheetApp.openById(SS_ID);
@@ -144,10 +148,11 @@ function doGet(e) {
       return jsonResponse({ success: true, data: allData });
 
     } else if (type === 'iri') {
-      // 先查 cache
-      const cached = getLargeCache('data_iri');
-      if (cached) {
-        return jsonResponse({ success: true, data: cached, cached: true });
+      if (!nocache) {
+        const cached = getLargeCache('data_iri');
+        if (cached) {
+          return jsonResponse({ success: true, data: cached, cached: true });
+        }
       }
 
       const ss     = SpreadsheetApp.openById(SS_ID);
