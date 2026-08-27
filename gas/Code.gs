@@ -36,6 +36,12 @@ function doPost(e) {
       return jsonResponse({ success: false, error: 'Empty CSV body' });
     }
 
+    // 防止超大 payload 耗盡 GAS quota（DoS 防護）
+    var MAX_RECORDS = 5000;
+    if (lines.length - 1 > MAX_RECORDS) {
+      return jsonResponse({ success: false, error: 'Too many records (max ' + MAX_RECORDS + ')' });
+    }
+
     const headers = parseCsvLine(lines[0]);
     const records = [];
     for (var i = 1; i < lines.length; i++) {
@@ -86,7 +92,8 @@ function doPost(e) {
 
     return jsonResponse({ success: true, inserted: records.length });
   } catch (err) {
-    return jsonResponse({ success: false, error: String(err) });
+    console.error('[doPost]', err);
+    return jsonResponse({ success: false, error: 'Internal server error' });
   }
 }
 
@@ -179,7 +186,8 @@ function doGet(e) {
 
     return jsonResponse({ success: false, error: 'type=all|sn|iri|iri_sheets required' });
   } catch (err) {
-    return jsonResponse({ success: false, error: String(err) });
+    console.error('[doGet]', err);
+    return jsonResponse({ success: false, error: 'Internal server error' });
   }
 }
 
