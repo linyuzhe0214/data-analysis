@@ -8,7 +8,15 @@
 //  POST ?type=sn|iri
 // ═══════════════════════════════════════════════════════════
 
-const SS_ID = PropertiesService.getScriptProperties().getProperty('SS_ID');
+const SS_ID     = PropertiesService.getScriptProperties().getProperty('SS_ID');
+const API_SECRET = PropertiesService.getScriptProperties().getProperty('API_SECRET');
+
+// ─── Auth helper ─────────────────────────────────────────
+function isAuthorized(e) {
+  // 若 ScriptProperty 尚未設定，放行（方便初次部署）
+  if (!API_SECRET) return true;
+  return e.parameter.key === API_SECRET;
+}
 
 const SN_SHEET = 'SN_Data';
 
@@ -23,6 +31,10 @@ function doOptions() {
 
 function doPost(e) {
   try {
+    if (!isAuthorized(e)) {
+      return jsonResponse({ success: false, error: 'Unauthorized' });
+    }
+
     const type = (e.parameter.type || '').toLowerCase();
 
     if (type !== 'sn' && type !== 'iri') {
@@ -34,6 +46,12 @@ function doPost(e) {
     const lines = csv.split('\n').filter(function(l) { return l.trim().length > 0; });
     if (lines.length < 2) {
       return jsonResponse({ success: false, error: 'Empty CSV body' });
+    }
+
+    // 防止超大 payload 耗盡 GAS quota（DoS 防護）
+    var MAX_RECORDS = 5000;
+    if (lines.length - 1 > MAX_RECORDS) {
+      return jsonResponse({ success: false, error: 'Too many records (max ' + MAX_RECORDS + ')' });
     }
 
     const headers = parseCsvLine(lines[0]);
@@ -53,7 +71,7 @@ function doPost(e) {
       // SN：依 route (國道別) 分組，各寫一個工作表
       var groups = {};
       records.forEach(function(r) {
-        var routeSafe = (r.route || '未知路線').replace(/[\\\/\?\*\[\]]/g, '');
+        var routeSafe = (r.route || '未知路線').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim().slice(0, 90);
         var key = 'SN_' + routeSafe;
         if (!groups[key]) groups[key] = [];
         groups[key].push(r);
@@ -86,12 +104,17 @@ function doPost(e) {
 
     return jsonResponse({ success: true, inserted: records.length });
   } catch (err) {
-    return jsonResponse({ success: false, error: String(err) });
+    console.error('[doPost]', err);
+    return jsonResponse({ success: false, error: 'Internal server error' });
   }
 }
 
 function doGet(e) {
   try {
+    if (!isAuthorized(e)) {
+      return jsonResponse({ success: false, error: 'Unauthorized' });
+    }
+
     const type = (e.parameter.type || '').toLowerCase();
     const nocache = e.parameter.nocache === '1' || e.parameter.nocache === 'true';
 
@@ -179,7 +202,8 @@ function doGet(e) {
 
     return jsonResponse({ success: false, error: 'type=all|sn|iri|iri_sheets required' });
   } catch (err) {
-    return jsonResponse({ success: false, error: String(err) });
+    console.error('[doGet]', err);
+    return jsonResponse({ success: false, error: 'Internal server error' });
   }
 }
 
@@ -188,9 +212,9 @@ function doGet(e) {
 // 例如：IRI_國道1號_南下_外側車道
 
 function iriSheetName(route, direction, lane) {
-  // 去除不能用在 Sheet 名稱的字元（/ \ ? * [ ]），最長 100 字
+  // 白名單：只允許中文、英數、底線、空白、連字號；長度限 100
   var safe = function(s) {
-    return String(s || '未知').replace(/[\/\\?*\[\]]/g, '').trim();
+    return String(s || '未知').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim();
   };
   return ('IRI_' + safe(route) + '_' + safe(direction) + '_' + safe(lane)).slice(0, 100);
 }
