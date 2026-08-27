@@ -59,7 +59,7 @@ function doPost(e) {
       // SN：依 route (國道別) 分組，各寫一個工作表
       var groups = {};
       records.forEach(function(r) {
-        var routeSafe = (r.route || '未知路線').replace(/[\\\/\?\*\[\]]/g, '');
+        var routeSafe = (r.route || '未知路線').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim().slice(0, 90);
         var key = 'SN_' + routeSafe;
         if (!groups[key]) groups[key] = [];
         groups[key].push(r);
@@ -196,9 +196,9 @@ function doGet(e) {
 // 例如：IRI_國道1號_南下_外側車道
 
 function iriSheetName(route, direction, lane) {
-  // 去除不能用在 Sheet 名稱的字元（/ \ ? * [ ]），最長 100 字
+  // 白名單：只允許中文、英數、底線、空白、連字號；長度限 100
   var safe = function(s) {
-    return String(s || '未知').replace(/[\/\\?*\[\]]/g, '').trim();
+    return String(s || '未知').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim();
   };
   return ('IRI_' + safe(route) + '_' + safe(direction) + '_' + safe(lane)).slice(0, 100);
 }
