@@ -145,12 +145,12 @@ export default function App() {
   };
 
   // 從雲端資料庫同步（可手動觸發）
-  const syncFromDB = async () => {
+  const syncFromDB = async (nocache = false) => {
     if (!GAS_URL) return;
     setIsSyncing(true);
 
     try {
-      const { sn: snRaw, iri: iriRaw } = await fetchAllData();
+      const { sn: snRaw, iri: iriRaw } = await fetchAllData(nocache);
       const snData: PavementData[] = snRaw.map(p => ({
         date: normalizeDateStr(p.date),
         route: p.route || '未知路線',
@@ -576,7 +576,7 @@ export default function App() {
             )}
             {GAS_URL && (
               <button
-                onClick={syncFromDB}
+                onClick={() => syncFromDB(true)}
                 disabled={isSyncing}
                 className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
                 title="從資料庫重新同步（清除本地快取）"

@@ -76,10 +76,12 @@ export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult
   return { success: true, inserted: records.length };
 };
 
-export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
+export const fetchAllData = async (nocache = false): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
+  const params: Record<string, string> = { type: 'all', _t: String(Date.now()) };
+  if (nocache) params.nocache = '1';
   try {
-    const res = await fetch(buildUrl(GAS_URL, { type: 'all', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
+    const res = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
     const json = await res.json();
     if (json.success && (json.sn || json.iri)) {
       return {
@@ -99,17 +101,21 @@ export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData
   return { sn, iri };
 };
 
-export const fetchSNData = async (): Promise<RawSnData[]> => {
+export const fetchSNData = async (nocache = false): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(buildUrl(GAS_URL, { type: 'sn', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
+  const params: Record<string, string> = { type: 'sn', _t: String(Date.now()) };
+  if (nocache) params.nocache = '1';
+  const res  = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawSnData>(json.data);
 };
 
-export const fetchIRIData = async (): Promise<RawIriData[]> => {
+export const fetchIRIData = async (nocache = false): Promise<RawIriData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(buildUrl(GAS_URL, { type: 'iri', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
+  const params: Record<string, string> = { type: 'iri', _t: String(Date.now()) };
+  if (nocache) params.nocache = '1';
+  const res  = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawIriData>(json.data);
