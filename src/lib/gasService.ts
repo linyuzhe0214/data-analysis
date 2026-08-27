@@ -4,6 +4,17 @@ import { RawSnData, RawIriData } from './excelParser';
 // 統一從環境變數讀取 GAS 網址，不管是開發還是正式環境都直連 GAS
 export const GAS_URL: string = import.meta.env.VITE_GAS_URL || '';
 
+// GAS API Secret（對應 GAS ScriptProperties 的 API_SECRET）
+const API_KEY: string = import.meta.env.VITE_GAS_API_KEY || '';
+
+/** 幫所有 GAS 請求附加 key= 參數（若無設定則略過）*/
+function buildUrl(base: string, params: Record<string, string> = {}): string {
+  const u = new URL(base);
+  if (API_KEY) u.searchParams.set('key', API_KEY);
+  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+  return u.toString();
+}
+
 interface UploadResult {
   success: boolean;
   inserted?: number;
@@ -54,21 +65,21 @@ function parseRowsToObjects<T>(data: any): T[] {
 export const uploadSNData = async (records: RawSnData[]): Promise<UploadResult> => {
   if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
   const SN_HEADERS = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
-  await postCsv(`${GAS_URL}?type=sn`, toCsv(SN_HEADERS, records));
+  await postCsv(buildUrl(GAS_URL, { type: 'sn' }), toCsv(SN_HEADERS, records));
   return { success: true, inserted: records.length };
 };
 
 export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult> => {
   if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
   const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
-  await postCsv(`${GAS_URL}?type=iri`, toCsv(IRI_HEADERS, records));
+  await postCsv(buildUrl(GAS_URL, { type: 'iri' }), toCsv(IRI_HEADERS, records));
   return { success: true, inserted: records.length };
 };
 
 export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
   try {
-    const res = await fetch(`${GAS_URL}?type=all&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(buildUrl(GAS_URL, { type: 'all', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
     const json = await res.json();
     if (json.success && (json.sn || json.iri)) {
       return {
@@ -90,7 +101,7 @@ export const fetchAllData = async (): Promise<{ sn: RawSnData[]; iri: RawIriData
 
 export const fetchSNData = async (): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(`${GAS_URL}?type=sn&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
+  const res  = await fetch(buildUrl(GAS_URL, { type: 'sn', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawSnData>(json.data);
@@ -98,7 +109,7 @@ export const fetchSNData = async (): Promise<RawSnData[]> => {
 
 export const fetchIRIData = async (): Promise<RawIriData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const res  = await fetch(`${GAS_URL}?type=iri&nocache=1&_t=${Date.now()}`, { cache: 'no-store' });
+  const res  = await fetch(buildUrl(GAS_URL, { type: 'iri', nocache: '1', _t: String(Date.now()) }), { cache: 'no-store' });
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawIriData>(json.data);

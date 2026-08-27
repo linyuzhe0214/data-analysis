@@ -8,7 +8,15 @@
 //  POST ?type=sn|iri
 // ═══════════════════════════════════════════════════════════
 
-const SS_ID = PropertiesService.getScriptProperties().getProperty('SS_ID');
+const SS_ID     = PropertiesService.getScriptProperties().getProperty('SS_ID');
+const API_SECRET = PropertiesService.getScriptProperties().getProperty('API_SECRET');
+
+// ─── Auth helper ─────────────────────────────────────────
+function isAuthorized(e) {
+  // 若 ScriptProperty 尚未設定，放行（方便初次部署）
+  if (!API_SECRET) return true;
+  return e.parameter.key === API_SECRET;
+}
 
 const SN_SHEET = 'SN_Data';
 
@@ -23,6 +31,10 @@ function doOptions() {
 
 function doPost(e) {
   try {
+    if (!isAuthorized(e)) {
+      return jsonResponse({ success: false, error: 'Unauthorized' });
+    }
+
     const type = (e.parameter.type || '').toLowerCase();
 
     if (type !== 'sn' && type !== 'iri') {
@@ -99,6 +111,10 @@ function doPost(e) {
 
 function doGet(e) {
   try {
+    if (!isAuthorized(e)) {
+      return jsonResponse({ success: false, error: 'Unauthorized' });
+    }
+
     const type = (e.parameter.type || '').toLowerCase();
     const nocache = e.parameter.nocache === '1' || e.parameter.nocache === 'true';
 
