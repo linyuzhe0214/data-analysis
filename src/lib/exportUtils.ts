@@ -60,6 +60,15 @@ const toLaneName = (lane: string): string =>
     .replace('第五車道', '第5車道')
     .replace('第六車道', '第6車道');
 
+const escapeFormula = (val: any): string => {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (/^[=+\-@\t\r]/.test(s)) {
+    return `'${s}`;
+  }
+  return s;
+};
+
 export const generateExportExcel = (
   data: PavementData[],
   category: 'IRI' | 'SN' | 'PRQI',
@@ -82,21 +91,21 @@ export const generateExportExcel = (
   data.forEach((d) => {
     const value = category === 'IRI' ? d.iri : category === 'SN' ? d.sn : d.prqi;
     rows.push([
-      toRouteCode(d.route),
+      escapeFormula(toRouteCode(d.route)),
       'main',
-      toDirection(d.direction),
+      escapeFormula(toDirection(d.direction)),
       mileageToMeters(d.mileage),
-      toLaneName(d.lane),
+      escapeFormula(toLaneName(d.lane)),
       Number(value.toFixed(3)),
       toROCYear(d.date),
-      d.date,
-      manualValues.unit,
-      manualValues.personnel,
-      manualValues.weather,
+      escapeFormula(d.date),
+      escapeFormula(manualValues.unit),
+      escapeFormula(manualValues.personnel),
+      escapeFormula(manualValues.weather),
       Number(manualValues.tmp) || 0,
       Number(manualValues.atmp) || 0,
-      manualValues.description,
-      manualValues.isAssessment,
+      escapeFormula(manualValues.description),
+      escapeFormula(manualValues.isAssessment),
     ]);
   });
 

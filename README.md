@@ -28,7 +28,7 @@ npm install
 
 # 複製環境變數範本
 cp .env.example .env.local
-# 在 .env.local 填入你的 GEMINI_API_KEY
+# 在 .env.local 填入你的 VITE_GAS_URL 與 VITE_GAS_API_KEY
 
 # 啟動 dev server（http://localhost:3000）
 npm run dev
@@ -50,9 +50,10 @@ npm run dev
 
 前往倉庫 → **Settings → Secrets and variables → Actions → New repository secret**，加入：
 
-| Secret 名稱 | 值 |
-|------------|-----|
-| `GEMINI_API_KEY` | 你的 Gemini API Key |
+| Secret 名稱 | 說明 |
+|------------|------|
+| `VITE_GAS_URL` | GAS Web App 部署網址（以 `/exec` 結尾） |
+| `VITE_GAS_API_KEY` | GAS ScriptProperties 配置的 API_SECRET |
 
 ### 2. 啟用 GitHub Pages
 
