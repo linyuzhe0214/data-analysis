@@ -13,15 +13,31 @@ const API_SECRET = PropertiesService.getScriptProperties().getProperty('API_SECR
 
 // ─── Auth helper ─────────────────────────────────────────
 function isAuthorized(e) {
-  // 若 ScriptProperty 尚未設定，放行（方便初次部署）
-  if (!API_SECRET) return true;
-  return e.parameter.key === API_SECRET;
+  // 嚴格 Fail-Closed：若 ScriptProperties 未設定 API_SECRET，一律拒絕所有存取
+  if (!API_SECRET || API_SECRET.trim().length === 0) {
+    console.error('[Auth] API_SECRET is not configured in ScriptProperties. Failing closed.');
+    return false;
+  }
+  return e && e.parameter && e.parameter.key === API_SECRET;
 }
 
 const SN_SHEET = 'SN_Data';
 
 const SN_HEADERS  = ['date', 'route', 'direction', 'lane', 'mileage', 'sn'];
 const IRI_HEADERS = ['date', 'time', 'route', 'direction', 'lane', 'mileage', 'avgIri', 'avgPrqi'];
+
+const ALLOWED_ROUTES = [
+  '國道1號', '國道2號', '國道3號', '國道3甲', '國道4號',
+  '國道5號', '國道6號', '國道7號', '國道8號', '國道10號',
+  '台61線', '台62線', '台64線', '台65線', '台66線', '台68線', '台72線', '台74線', '台76線', '台78線', '台82線', '台84線', '台86線', '台88線'
+];
+
+function sanitizeRoute(route) {
+  var s = String(route || '').trim();
+  if (ALLOWED_ROUTES.indexOf(s) !== -1) return s;
+  var safe = s.replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim().slice(0, 30);
+  return safe || '其他路線';
+}
 
 // ─── Entry Points ────────────────────────────────────────
 
@@ -71,13 +87,18 @@ function doPost(e) {
       // SN：依 route (國道別) 分組，各寫一個工作表
       var groups = {};
       records.forEach(function(r) {
-        var routeSafe = (r.route || '未知路線').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim().slice(0, 90);
+        var routeSafe = sanitizeRoute(r.route);
         var key = 'SN_' + routeSafe;
         if (!groups[key]) groups[key] = [];
         groups[key].push(r);
       });
 
-      Object.keys(groups).forEach(function(sheetName) {
+      var groupKeys = Object.keys(groups);
+      if (groupKeys.length > 20) {
+        return jsonResponse({ success: false, error: 'Too many distinct sheet groups (max 20)' });
+      }
+
+      groupKeys.forEach(function(sheetName) {
         appendRows(sheetName, SN_HEADERS, groups[sheetName]);
       });
 
@@ -90,7 +111,12 @@ function doPost(e) {
         groups[key].push(r);
       });
 
-      Object.keys(groups).forEach(function(sheetName) {
+      var groupKeys = Object.keys(groups);
+      if (groupKeys.length > 20) {
+        return jsonResponse({ success: false, error: 'Too many distinct sheet groups (max 20)' });
+      }
+
+      groupKeys.forEach(function(sheetName) {
         appendRows(sheetName, IRI_HEADERS, groups[sheetName]);
       });
     }
@@ -212,11 +238,16 @@ function doGet(e) {
 // 例如：IRI_國道1號_南下_外側車道
 
 function iriSheetName(route, direction, lane) {
-  // 白名單：只允許中文、英數、底線、空白、連字號；長度限 100
-  var safe = function(s) {
-    return String(s || '未知').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim();
+  var safeRoute = sanitizeRoute(route);
+  var safeDir = function(s) {
+    var d = String(s || '未知方向').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim();
+    return d.slice(0, 15) || '未知方向';
   };
-  return ('IRI_' + safe(route) + '_' + safe(direction) + '_' + safe(lane)).slice(0, 100);
+  var safeLane = function(s) {
+    var l = String(s || '未知車道').replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_ ]/g, '').trim();
+    return l.slice(0, 15) || '未知車道';
+  };
+  return ('IRI_' + safeRoute + '_' + safeDir(direction) + '_' + safeLane(lane)).slice(0, 90);
 }
 
 // ─── CSV Parser (RFC 4180) ───────────────────────────────
@@ -247,6 +278,17 @@ function parseCsvLine(line) {
 
 // ─── Sheet Helpers ───────────────────────────────────────
 
+function sanitizeCell(val) {
+  if (val === null || val === undefined) return '';
+  var s = String(val);
+  // 防範 Google Sheets Formula Injection (CSV / Excel Formula Injection)
+  // 若字串以 '=', '+', '-', '@', '\t', '\r' 開頭，補上前綴單引號強制以純文字儲存
+  if (/^[=+\-@\t\r]/.test(s)) {
+    return "'" + s;
+  }
+  return s;
+}
+
 function getOrCreateSheet(sheetName, headers) {
   const ss    = SpreadsheetApp.openById(SS_ID);
   let   sheet = ss.getSheetByName(sheetName);
@@ -265,7 +307,9 @@ function getOrCreateSheet(sheetName, headers) {
 function appendRows(sheetName, headers, records) {
   const sheet = getOrCreateSheet(sheetName, headers);
   const rows  = records.map(function(r) {
-    return headers.map(function(h) { return r[h] !== undefined ? r[h] : ''; });
+    return headers.map(function(h) {
+      return sanitizeCell(r[h]);
+    });
   });
   if (rows.length > 0) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
