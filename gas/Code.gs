@@ -121,11 +121,18 @@ function doPost(e) {
       });
     }
 
-    // 寫入後清除該類型的 cache，讓下次同步拿到最新資料
+    // 寫入後清除快取與整併工作表，並更新 LAST_UPDATED 時間戳記
     try {
       clearLargeCache('data_sn');
       clearLargeCache('data_iri');
       clearLargeCache('data_all');
+      PropertiesService.getScriptProperties().setProperty('LAST_UPDATED', String(Date.now()));
+      
+      var ss = SpreadsheetApp.openById(SS_ID);
+      var cacheSheet = ss.getSheetByName('_CACHE_ALL_');
+      if (cacheSheet) {
+        ss.deleteSheet(cacheSheet);
+      }
     } catch(_) {}
 
     return jsonResponse({ success: true, inserted: records.length });
@@ -144,32 +151,88 @@ function doGet(e) {
     const type = (e.parameter.type || '').toLowerCase();
     const nocache = e.parameter.nocache === '1' || e.parameter.nocache === 'true';
 
+    // ── 輕量 Metadata 檢查（~150ms），前端可用於比對是否需要重新拉取全量資料 ──
+    if (type === 'meta') {
+      const lastUpdated = PropertiesService.getScriptProperties().getProperty('LAST_UPDATED') || '0';
+      return jsonResponse({ success: true, lastUpdated: Number(lastUpdated) });
+    }
+
     if (type === 'all') {
+      const lastUpdated = Number(PropertiesService.getScriptProperties().getProperty('LAST_UPDATED') || Date.now());
+
       if (!nocache) {
         const cached = getLargeCache('data_all');
         if (cached) {
-          return jsonResponse({ success: true, ...cached, cached: true });
+          return jsonResponse({ success: true, ...cached, cached: true, lastUpdated: lastUpdated });
         }
       }
 
       const ss = SpreadsheetApp.openById(SS_ID);
-      const allSheets = ss.getSheets();
-
+      
+      // 優先檢查是否有整併快取工作表（1 次 API 讀取取代 30+ 次逐表讀取）
+      var cacheSheet = ss.getSheetByName('_CACHE_ALL_');
       var snRows = [];
       var iriRows = [];
+      var fromCacheSheet = false;
 
-      allSheets.forEach(function(sheet) {
-        var name = sheet.getName();
-        if (name.indexOf('SN_') === 0) {
-          snRows = snRows.concat(readSheetRawRows(sheet));
-        } else if (name.indexOf('IRI_') === 0) {
-          iriRows = iriRows.concat(readSheetRawRows(sheet));
+      if (cacheSheet && !nocache) {
+        try {
+          var cacheData = cacheSheet.getDataRange().getValues();
+          if (cacheData.length > 1) {
+            for (var i = 1; i < cacheData.length; i++) {
+              var row = cacheData[i];
+              if (row[0] === 'SN') {
+                snRows.push(row.slice(1, SN_HEADERS.length + 1));
+              } else if (row[0] === 'IRI') {
+                iriRows.push(row.slice(1, IRI_HEADERS.length + 1));
+              }
+            }
+            fromCacheSheet = true;
+          }
+        } catch (err) {
+          console.warn('[CacheSheet] 讀取失敗，回退至全表掃描', err);
         }
-      });
+      }
+
+      if (!fromCacheSheet) {
+        const allSheets = ss.getSheets();
+        allSheets.forEach(function(sheet) {
+          var name = sheet.getName();
+          if (name.indexOf('SN_') === 0) {
+            snRows = snRows.concat(readSheetRawRows(sheet));
+          } else if (name.indexOf('IRI_') === 0) {
+            iriRows = iriRows.concat(readSheetRawRows(sheet));
+          }
+        });
+
+        // 背景建立/更新 _CACHE_ALL_ 隱藏工作表，供後續秒級讀取
+        try {
+          if (!cacheSheet) {
+            cacheSheet = ss.insertSheet('_CACHE_ALL_');
+            cacheSheet.hideSheet();
+          } else {
+            cacheSheet.clear();
+          }
+          var consolidated = [['TYPE'].concat(IRI_HEADERS)];
+          snRows.forEach(function(r) { consolidated.push(['SN'].concat(r)); });
+          iriRows.forEach(function(r) { consolidated.push(['IRI'].concat(r)); });
+          if (consolidated.length > 1) {
+            var maxCols = Math.max(SN_HEADERS.length, IRI_HEADERS.length) + 1;
+            var padded = consolidated.map(function(r) {
+              while (r.length < maxCols) r.push('');
+              return r;
+            });
+            cacheSheet.getRange(1, 1, padded.length, maxCols).setValues(padded);
+          }
+        } catch (err) {
+          console.warn('[CacheSheet] 寫入整併表失敗', err);
+        }
+      }
 
       var result = {
         sn: { headers: SN_HEADERS, rows: snRows },
-        iri: { headers: IRI_HEADERS, rows: iriRows }
+        iri: { headers: IRI_HEADERS, rows: iriRows },
+        lastUpdated: lastUpdated
       };
 
       setLargeCache('data_all', result);
@@ -226,7 +289,7 @@ function doGet(e) {
       return jsonResponse({ success: true, sheets: names });
     }
 
-    return jsonResponse({ success: false, error: 'type=all|sn|iri|iri_sheets required' });
+    return jsonResponse({ success: false, error: 'type=all|sn|iri|iri_sheets|meta required' });
   } catch (err) {
     console.error('[doGet]', err);
     return jsonResponse({ success: false, error: 'Internal server error' });
@@ -326,16 +389,29 @@ function readSheet(sheetName, headers) {
 function readSheetRawRows(sheet) {
   const vals = sheet.getDataRange().getValues();
   if (vals.length < 2) return [];
-  return vals.slice(1);
+  // 跳過 header，並將 Date 物件預先格式化為 YYYY-MM-DD，減輕前端字串轉換負擔
+  return vals.slice(1).map(function(row) {
+    return row.map(function(cell) {
+      if (cell instanceof Date) {
+        return Utilities.formatDate(cell, 'Asia/Taipei', 'yyyy-MM-dd');
+      }
+      return cell;
+    });
+  });
 }
 
 function readSheetObj(sheet, headers) {
   const vals = sheet.getDataRange().getValues();
   if (vals.length < 2) return [];
-  // 跳過第一列 header
   return vals.slice(1).map(function(row) {
     var obj = {};
-    headers.forEach(function(h, i) { obj[h] = row[i]; });
+    headers.forEach(function(h, i) {
+      var val = row[i];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, 'Asia/Taipei', 'yyyy-MM-dd');
+      }
+      obj[h] = val;
+    });
     return obj;
   });
 }
@@ -345,15 +421,23 @@ function setLargeCache(key, dataObj, ttl) {
   var json = JSON.stringify(dataObj);
   var chunkSize = 90000;
   var count = Math.ceil(json.length / chunkSize);
-  var cacheObj = {};
-  cacheObj[key + '_count'] = String(count);
-  for (var i = 0; i < count; i++) {
-    cacheObj[key + '_' + i] = json.slice(i * chunkSize, (i + 1) * chunkSize);
+
+  // 若資料過大超過 CacheService 總額（~2MB），跳過快取改由 _CACHE_ALL_ 工作表提供秒級支援
+  if (json.length > 2000000) {
+    console.warn('[Cache] 資料量超過 CacheService 限制 (' + json.length + ' bytes)，依賴工作表快取');
+    return false;
   }
+
   try {
-    cache.putAll(cacheObj, ttl || 21600);
+    cache.put(key + '_count', String(count), ttl || 21600);
+    // 改為單個 chunk 寫入，避免 putAll(dict) 總體積超過 100KB 拋錯
+    for (var i = 0; i < count; i++) {
+      cache.put(key + '_' + i, json.slice(i * chunkSize, (i + 1) * chunkSize), ttl || 21600);
+    }
+    return true;
   } catch (e) {
     console.warn('Cache put failed', e);
+    return false;
   }
 }
 

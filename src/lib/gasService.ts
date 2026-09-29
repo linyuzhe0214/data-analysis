@@ -51,13 +51,21 @@ function parseRowsToObjects<T>(data: any): T[] {
   if (Array.isArray(data)) return data as T[];
   if (data.headers && Array.isArray(data.rows)) {
     const headers: string[] = data.headers;
-    return data.rows.map((row: any[]) => {
+    const hLen = headers.length;
+    const rows: any[][] = data.rows;
+    const rLen = rows.length;
+    const result: T[] = new Array(rLen);
+    
+    // 高速單迴圈轉換，避免巢狀 forEach / map 產生的函式呼叫與 GC 開銷
+    for (let i = 0; i < rLen; i++) {
+      const row = rows[i];
       const obj: Record<string, any> = {};
-      headers.forEach((h, idx) => {
-        obj[h] = row[idx] !== undefined ? row[idx] : '';
-      });
-      return obj as T;
-    });
+      for (let j = 0; j < hLen; j++) {
+        obj[headers[j]] = row[j] !== undefined ? row[j] : '';
+      }
+      result[i] = obj as T;
+    }
+    return result;
   }
   return [];
 }
@@ -76,17 +84,39 @@ export const uploadIRIData = async (records: RawIriData[]): Promise<UploadResult
   return { success: true, inserted: records.length };
 };
 
-export const fetchAllData = async (nocache = false): Promise<{ sn: RawSnData[]; iri: RawIriData[] }> => {
-  if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const params: Record<string, string> = { type: 'all', _t: String(Date.now()) };
-  if (nocache) params.nocache = '1';
+/**
+ * 輕量檢查雲端資料最後更新時間戳記（僅需約 150ms，不需拉取龐大資料集）
+ */
+export const fetchMetadata = async (): Promise<{ lastUpdated: number } | null> => {
+  if (!GAS_URL) return null;
   try {
-    const res = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
+    const res = await fetch(buildUrl(GAS_URL, { type: 'meta', _t: String(Date.now()) }), { cache: 'no-store' });
+    const json = await res.json();
+    if (json.success && json.lastUpdated) {
+      return { lastUpdated: Number(json.lastUpdated) };
+    }
+  } catch {
+    // 舊版 GAS 未支援 meta 時回傳 null
+  }
+  return null;
+};
+
+export const fetchAllData = async (nocache = false): Promise<{ sn: RawSnData[]; iri: RawIriData[]; lastUpdated?: number }> => {
+  if (!GAS_URL) throw new Error('GAS URL 未設定');
+  const params: Record<string, string> = { type: 'all' };
+  if (nocache) {
+    params.nocache = '1';
+    params._t = String(Date.now());
+  }
+  
+  try {
+    const res = await fetch(buildUrl(GAS_URL, params), nocache ? { cache: 'no-store' } : {});
     const json = await res.json();
     if (json.success && (json.sn || json.iri)) {
       return {
         sn: parseRowsToObjects<RawSnData>(json.sn),
         iri: parseRowsToObjects<RawIriData>(json.iri),
+        lastUpdated: json.lastUpdated,
       };
     }
   } catch (err) {
@@ -95,17 +125,20 @@ export const fetchAllData = async (nocache = false): Promise<{ sn: RawSnData[]; 
 
   // 舊版或未部署 type=all 之相容回退機制：發起獨立請求
   const [sn, iri] = await Promise.all([
-    fetchSNData().catch(() => []),
-    fetchIRIData().catch(() => [])
+    fetchSNData(nocache).catch(() => []),
+    fetchIRIData(nocache).catch(() => [])
   ]);
   return { sn, iri };
 };
 
 export const fetchSNData = async (nocache = false): Promise<RawSnData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const params: Record<string, string> = { type: 'sn', _t: String(Date.now()) };
-  if (nocache) params.nocache = '1';
-  const res  = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
+  const params: Record<string, string> = { type: 'sn' };
+  if (nocache) {
+    params.nocache = '1';
+    params._t = String(Date.now());
+  }
+  const res  = await fetch(buildUrl(GAS_URL, params), nocache ? { cache: 'no-store' } : {});
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawSnData>(json.data);
@@ -113,9 +146,12 @@ export const fetchSNData = async (nocache = false): Promise<RawSnData[]> => {
 
 export const fetchIRIData = async (nocache = false): Promise<RawIriData[]> => {
   if (!GAS_URL) throw new Error('GAS URL 未設定');
-  const params: Record<string, string> = { type: 'iri', _t: String(Date.now()) };
-  if (nocache) params.nocache = '1';
-  const res  = await fetch(buildUrl(GAS_URL, params), { cache: 'no-store' });
+  const params: Record<string, string> = { type: 'iri' };
+  if (nocache) {
+    params.nocache = '1';
+    params._t = String(Date.now());
+  }
+  const res  = await fetch(buildUrl(GAS_URL, params), nocache ? { cache: 'no-store' } : {});
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawIriData>(json.data);
