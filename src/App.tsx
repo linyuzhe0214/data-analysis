@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers } from 'lucide-react';
+import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff } from 'lucide-react';
 import { PavementData } from './types';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
@@ -8,8 +8,10 @@ import { ExportWizard } from './components/ExportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
 import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, fetchAllData, fetchMetadata, GAS_URL } from './lib/gasService';
 import { getLocalData, saveLocalData, clearLocalDataStorage } from './lib/storage';
+import { ExemptZoneManager, ExemptZone } from './components/ExemptZoneManager';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
+type IriExemptMode = 'all' | 'exclude' | 'low-accept';
 
 interface UploadResult {
   type: 'iri' | 'sn';
@@ -99,6 +101,34 @@ export default function App() {
   const [selectedIriDate, setSelectedIriDate] = useState<string>('');
   const [selectedSnDate, setSelectedSnDate] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
+  const [exemptZones, setExemptZones] = useState<ExemptZone[]>(() => {
+    try {
+      const saved = localStorage.getItem('iri_exempt_zones');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [iriExemptMode, setIriExemptMode] = useState<IriExemptMode>(() => {
+    try {
+      const saved = localStorage.getItem('iri_exempt_mode');
+      return (saved as IriExemptMode) || 'all';
+    } catch {
+      return 'all';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('iri_exempt_zones', JSON.stringify(exemptZones));
+    } catch {}
+  }, [exemptZones]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('iri_exempt_mode', iriExemptMode);
+    } catch {}
+  }, [iriExemptMode]);
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
   const [wizardState, setWizardState] = useState<{ files: File[], type: 'iri' | 'sn' } | null>(null);
@@ -446,6 +476,21 @@ export default function App() {
     return lane === selectedLane;
   };
 
+  // 判斷某一資料點是否落在免測路段內（依路線+方向）
+  const isExempt = (d: PavementData, zones: ExemptZone[]): boolean => {
+    return zones.some(z => {
+      if (z.route !== d.route) return false;
+      if (z.direction && z.direction !== d.direction) return false;
+      if (z.type === 'point') {
+        const target = z.mileage ?? -Infinity;
+        return Math.abs(d.mileage - target) <= 0.01;
+      }
+      const s = Math.min(z.start ?? Infinity, z.end ?? -Infinity);
+      const e = Math.max(z.start ?? Infinity, z.end ?? -Infinity);
+      return d.mileage >= s && d.mileage <= e;
+    });
+  };
+
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
 
@@ -454,11 +499,28 @@ export default function App() {
       (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection)
     );
 
-    const iriData = selectedIriDate ? routeData.filter(d =>
+    // 取得同路線的免測規則
+    const routeZones = exemptZones.filter(z => z.route === selectedRoute);
+
+    // 依模式過濾 IRI 資料
+    const applyExempt = (items: PavementData[]): PavementData[] => {
+      if (iriExemptMode === 'all' || routeZones.length === 0) return items;
+      if (iriExemptMode === 'exclude') return items.filter(d => !isExempt(d, routeZones));
+      // 'low-accept'：免測路段中 IRI ≤ 1.75 的仍保留，>1.75 的排除
+      return items.filter(d => {
+        if (!isExempt(d, routeZones)) return true;
+        return d.iri <= 1.75;
+      });
+    };
+
+    const rawIriData = selectedIriDate ? routeData.filter(d =>
       d.date === selectedIriDate &&
       d.iri > 0 &&
       laneFilter(d.lane)
     ) : [];
+
+    const iriData = applyExempt(rawIriData);
+    const exemptedCount = rawIriData.length - iriData.length;
 
     const snData = selectedSnDate ? routeData.filter(d =>
       d.date === selectedSnDate &&
@@ -471,16 +533,13 @@ export default function App() {
 
     // IRI 級距統計（處數 + 百分比）
     const n = iriData.length;
-    const iriB0 = iriData.filter(d => d.iri < 1.75).length;            // IRI < 1.75
-    const iriB1 = iriData.filter(d => d.iri >= 1.75 && d.iri < 2.0).length; // 1.75 ≤ IRI < 2.0
-    const iriB2 = iriData.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;  // 2.0 ≤ IRI < 2.5
-    const iriB3 = iriData.filter(d => d.iri >= 2.5).length;            // IRI ≥ 2.5
+    const iriB1 = iriData.filter(d => d.iri >= 1.75 && d.iri < 2.0).length;
+    const iriB2 = iriData.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;
+    const iriB3 = iriData.filter(d => d.iri >= 2.5).length;
     const pct = (c: number) => (n > 0 ? (c / n * 100).toFixed(1) : '0.0');
 
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
-    // 車道公里數：按方向分組，各方向獨立計算後加總
-    // 避免雙向時「第一車道」在南下/北上被視為同一條而少算
     const allStatsData = [...iriData, ...snData];
     const directions = Array.from(new Set(allStatsData.map(d => d.direction)));
 
@@ -493,7 +552,6 @@ export default function App() {
         const lanesAtM = new Set(group.filter(d => d.mileage === ms[i]).map(d => d.lane)).size;
         km += segLen * (lanesAtM || 1);
       }
-      // 最後一個里程點用倒數第二段間距估算
       const lastSeg = ms[ms.length - 1] - ms[ms.length - 2];
       const lanesAtLast = new Set(group.filter(d => d.mileage === ms[ms.length - 1]).map(d => d.lane)).size;
       km += lastSeg * (lanesAtLast || 1);
@@ -523,9 +581,11 @@ export default function App() {
       countSn35,
       laneLengthKm: laneLengthKm.toFixed(2),
       iriDate: selectedIriDate,
-      snDate: selectedSnDate
+      snDate: selectedSnDate,
+      exemptedCount,
+      totalBeforeExempt: rawIriData.length,
     };
-  }, [data, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate, activeTab]);
+  }, [data, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate, activeTab, exemptZones, iriExemptMode]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -644,6 +704,16 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* 免測路段管理面板 */}
+            {activeTab === 'trends' && (
+              <ExemptZoneManager
+                zones={exemptZones}
+                routes={routes}
+                directions={availableDirections.filter(d => d !== '雙向')}
+                onChange={setExemptZones}
+              />
+            )}
+
             {/* Filters */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
@@ -809,6 +879,30 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* IRI 免測模式切換 */}
+                  {exemptZones.filter(z => z.route === selectedRoute).length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-500">免測統計模式：</span>
+                      {([
+                        { mode: 'all' as IriExemptMode, label: '全採納', color: 'bg-slate-600' },
+                        { mode: 'exclude' as IriExemptMode, label: '扣除免測', color: 'bg-amber-600' },
+                        { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', color: 'bg-blue-600' },
+                      ]).map(({ mode, label, color }) => (
+                        <button
+                          key={mode}
+                          onClick={() => setIriExemptMode(mode)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            iriExemptMode === mode
+                              ? `${color} text-white shadow-sm`
+                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {stats && (
                     <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
                       <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
@@ -904,6 +998,20 @@ export default function App() {
                           <p className="text-xl font-bold text-slate-800">{stats.laneLengthKm}</p>
                           <span className="text-[11px] text-slate-400">車道公里</span>
                         </div>
+                        {/* 免測扣除提示 */}
+                        {stats.exemptedCount > 0 && (
+                          <div className="col-span-2 md:col-span-4 lg:col-span-8 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <ShieldOff className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span className="text-xs text-amber-800">
+                                目前依<strong>「{iriExemptMode === 'exclude' ? '扣除免測' : '免測但 ≤1.75 仍採納'}」</strong>模式排除 <strong>{stats.exemptedCount}</strong> 處伸縮縫/免測點（原始 {stats.totalBeforeExempt} 處），以有效 <strong>{stats.totalBeforeExempt - stats.exemptedCount}</strong> 處計算平均 IRI 及各階級。
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-amber-600 font-semibold bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                              已校正
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
