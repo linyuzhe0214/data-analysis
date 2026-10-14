@@ -46,6 +46,11 @@ const parseMileageToNumber = (raw: any): number => {
 
 export type IriExemptMode = 'all' | 'exclude' | 'low-accept';
 
+export interface ConstructionSegment {
+  start: number;
+  end: number;
+}
+
 interface Props {
   dbData: PavementData[];
   exemptZones: ExemptZone[];
@@ -194,50 +199,93 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     if (!availableLanes.includes(selectedLane)) setSelectedLane('全車道');
   }, [availableLanes]);
 
-  // ── 施工里程範圍（供對比圖與比對資料過濾 dbData 用）
-  const constMileageRange = useMemo(() => {
-    if (!selectedRoute || constData.length === 0) return null;
+  // ── 施工區段群（支援跳區域，例如 173~180, 190~192）
+  const constSegments = useMemo<ConstructionSegment[]>(() => {
+    if (!selectedRoute || constData.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
-    const ms = constData
-      .filter(d => (isAllDistrict || d.route === selectedRoute) &&
-        (selectedDirection === '雙向' || d.direction === selectedDirection))
-      .map(d => d.mileage);
-    if (ms.length === 0) return null;
-    return { min: Math.min(...ms), max: Math.max(...ms) };
+    const ms = Array.from(new Set(
+      constData
+        .filter(d => (isAllDistrict || d.route === selectedRoute) &&
+          (selectedDirection === '雙向' || d.direction === selectedDirection))
+        .map(d => Number(d.mileage.toFixed(3)))
+    )).sort((a, b) => a - b);
+
+    if (ms.length === 0) return [];
+
+    const GAP_THRESHOLD = 0.3; // 300 公尺以上差距即視為跳區（非連續施工區段）
+    const segs: ConstructionSegment[] = [];
+    let curStart = ms[0];
+    let curEnd = ms[0];
+
+    for (let i = 1; i < ms.length; i++) {
+      const m = ms[i];
+      if (m - curEnd <= GAP_THRESHOLD) {
+        curEnd = m;
+      } else {
+        segs.push({ start: curStart, end: curEnd });
+        curStart = m;
+        curEnd = m;
+      }
+    }
+    segs.push({ start: curStart, end: curEnd });
+    return segs;
   }, [constData, selectedRoute, selectedDirection]);
 
-  // ── 資料庫比對可用日期
+  // 判斷某里程是否落在施工區段內（前後加 0.05km 容許誤差，跳區者返回 false）
+  const isInConstArea = (mileage: number, tolerance = 0.05): boolean => {
+    if (constSegments.length === 0) return false;
+    return constSegments.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+  };
+
+  // 施工里程極值（供圖表邊界參考）
+  const constMileageRange = useMemo(() => {
+    if (constSegments.length === 0) return null;
+    return {
+      min: constSegments[0].start,
+      max: constSegments[constSegments.length - 1].end,
+      segments: constSegments,
+    };
+  }, [constSegments]);
+
+  // 格式化施工區間文字（例如：173.000k ~ 180.000k、190.000k ~ 192.000k）
+  const formatSegmentsText = (segments: ConstructionSegment[]): string => {
+    if (segments.length === 0) return '無里程資料';
+    if (segments.length === 1) {
+      return `${segments[0].start.toFixed(3)}k ~ ${segments[0].end.toFixed(3)}k`;
+    }
+    return segments.map(s => `${s.start.toFixed(3)}k ~ ${s.end.toFixed(3)}k`).join('、') + ` (共 ${segments.length} 處施工區段)`;
+  };
+
+  // ── 資料庫比對可用日期（嚴格限制落在施工區段內，跳區無施工處不比對）
   const availableDbIriDates = useMemo(() => {
-    if (!compareMode || !selectedRoute || !constMileageRange) return [];
+    if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
-    const { min, max } = constMileageRange;
     return Array.from(new Set(
       dbData
         .filter(d =>
           (isAllDistrict || d.route === selectedRoute) &&
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
           d.iri > 0 &&
-          d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+          isInConstArea(d.mileage)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, constMileageRange, dbData]);
+  }, [compareMode, selectedRoute, selectedDirection, constSegments, dbData]);
 
   const availableDbSnDates = useMemo(() => {
-    if (!compareMode || !selectedRoute || !constMileageRange) return [];
+    if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
-    const { min, max } = constMileageRange;
     return Array.from(new Set(
       dbData
         .filter(d =>
           (isAllDistrict || d.route === selectedRoute) &&
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
           d.sn > 0 &&
-          d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+          isInConstArea(d.mileage)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, constMileageRange, dbData]);
+  }, [compareMode, selectedRoute, selectedDirection, constSegments, dbData]);
 
   // 自動設定預設的比對日期（優先選施工日期前最近一期）
   React.useEffect(() => {
@@ -336,15 +384,14 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     let dbExemptedCount = 0;
     let dbTotalRaw = 0;
 
-    if (compareMode && constMileageRange) {
-      const { min, max } = constMileageRange;
+    if (compareMode && constSegments.length > 0) {
       if (selectedDbIriDate) {
         const rawDbIri = dbData.filter(d =>
           baseFilter(d) &&
           d.iri > 0 &&
           d.date === selectedDbIriDate &&
           laneFilter(d.lane) &&
-          d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+          isInConstArea(d.mileage)
         );
         dbTotalRaw = rawDbIri.length;
         const dbIriData = applyExempt(rawDbIri, activeZones);
@@ -362,7 +409,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
           d.sn > 0 &&
           d.date === selectedDbSnDate &&
           laneFilter(d.lane) &&
-          d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+          isInConstArea(d.mileage)
         );
         dbSnCount = dbSnData.length;
         dbAvgSn = dbSnCount > 0 ? dbSnData.reduce((a, d) => a + d.sn, 0) / dbSnCount : 0;
@@ -417,14 +464,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     };
   }, [
     constData, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate,
-    compareMode, dbData, constMileageRange, selectedDbIriDate, selectedDbSnDate,
+    compareMode, dbData, constSegments, selectedDbIriDate, selectedDbSnDate,
     exemptZones, currentIriExemptMode, MERGED_LANE_KEY
   ]);
 
-  // ── 對比圖表資料：施工後與資料庫施工前合併繪製
+  // ── 對比圖表資料：施工後與資料庫施工前合併繪製（施工前僅納入施工區段內，跳區不顯示）
   const combinedIriData = useMemo(() => {
-    if (!compareMode || !selectedDbIriDate || !constMileageRange) return [];
-    const { min, max } = constMileageRange;
+    if (!compareMode || !selectedDbIriDate || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
     const laneFilter = (l: string) => {
       if (selectedLane === '全車道') return true;
@@ -432,7 +478,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    // 施工前
+    // 施工前（跳區無施工之路段不顯示、不繪製）
     const dbPts = dbData
       .filter(d =>
         (isAllDistrict || d.route === selectedRoute) &&
@@ -440,7 +486,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
         laneFilter(d.lane) &&
         d.iri > 0 &&
         d.date === selectedDbIriDate &&
-        d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+        isInConstArea(d.mileage)
       )
       .map(d => ({ ...d, date: `${selectedDbIriDate} (施工前)` }));
 
@@ -456,11 +502,10 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       .map(d => ({ ...d, date: `${selectedIriDate} (施工後)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbIriDate, constMileageRange, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbIriDate, constSegments, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
 
   const combinedSnData = useMemo(() => {
-    if (!compareMode || !selectedDbSnDate || !constMileageRange) return [];
-    const { min, max } = constMileageRange;
+    if (!compareMode || !selectedDbSnDate || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
     const laneFilter = (l: string) => {
       if (selectedLane === '全車道') return true;
@@ -468,7 +513,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    // 施工前
+    // 施工前（跳區無施工之路段不顯示、不繪製）
     const dbPts = dbData
       .filter(d =>
         (isAllDistrict || d.route === selectedRoute) &&
@@ -476,7 +521,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
         laneFilter(d.lane) &&
         d.sn > 0 &&
         d.date === selectedDbSnDate &&
-        d.mileage >= min - 0.01 && d.mileage <= max + 0.01
+        isInConstArea(d.mileage)
       )
       .map(d => ({ ...d, date: `${selectedDbSnDate} (施工前)` }));
 
@@ -492,17 +537,16 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       .map(d => ({ ...d, date: `${selectedSnDate} (施工後)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbSnDate, constMileageRange, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbSnDate, constSegments, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
 
-  // 單獨的施工前資料（只包含選取的比對日期與施工里程範圍）
+  // 單獨的施工前資料（只包含選取的比對日期與施工區段範圍）
   const singleDbData = useMemo(() => {
-    if (!compareMode || !constMileageRange) return [];
-    const { min, max } = constMileageRange;
+    if (!compareMode || constSegments.length === 0) return [];
     return dbData.filter(d =>
-      d.mileage >= min - 0.01 && d.mileage <= max + 0.01 &&
+      isInConstArea(d.mileage) &&
       (d.date === selectedDbIriDate || d.date === selectedDbSnDate)
     );
-  }, [compareMode, constMileageRange, dbData, selectedDbIriDate, selectedDbSnDate]);
+  }, [compareMode, constSegments, dbData, selectedDbIriDate, selectedDbSnDate]);
 
   // ── 上傳處理
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'iri' | 'sn') => {
@@ -708,11 +752,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
               <div className="flex items-center gap-2">
                 <GitCompare className="w-4 h-4 text-indigo-600" />
                 <span className="text-xs font-bold text-indigo-900">
-                  前後對比比對資料設定 — 施工里程範圍：{constMileageRange ? `${constMileageRange.min.toFixed(3)}k ~ ${constMileageRange.max.toFixed(3)}k` : '無里程資料'}
+                  前後對比比對資料設定 — 施工里程範圍：{formatSegmentsText(constSegments)}
                 </span>
               </div>
               <span className="text-[11px] text-indigo-600 font-medium bg-indigo-100/70 px-2.5 py-0.5 rounded-full">
-                資料庫資料範圍已鎖定施工區間
+                資料庫資料已自動限制於施工區間內（跳區不顯示）
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
@@ -879,8 +923,8 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                     <p className="text-xs font-bold text-slate-700">
                       後: {stats.constIriCount} 點 / 前: {stats.dbIriCount} 點
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                      {constMileageRange ? `${constMileageRange.min.toFixed(3)}k ~ ${constMileageRange.max.toFixed(3)}k` : ''}
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate" title={formatSegmentsText(constSegments)}>
+                      {formatSegmentsText(constSegments)}
                     </p>
                   </div>
                   <div className="mt-2">

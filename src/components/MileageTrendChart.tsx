@@ -98,7 +98,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
       keysSet.add(dataKey);
     });
 
-    const processedData = Object.values(byMileage).map((item: any) => {
+    const sortedRaw = Object.values(byMileage).map((item: any) => {
       const result: any = { mileage: item.mileage };
       keysSet.forEach(key => {
         if (item[key]) {
@@ -107,6 +107,28 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
       });
       return result;
     }).sort((a, b) => a.mileage - b.mileage);
+
+    // ── 斷點處理：若相鄰兩測點間距大於 0.3km (300m)，視為施工跳區或未檢測區間，插入 null 斷點不跨區連線
+    const BREAK_GAP_THRESHOLD = 0.3;
+    const processedData: any[] = [];
+    for (let i = 0; i < sortedRaw.length; i++) {
+      const curr = sortedRaw[i];
+      if (i > 0) {
+        const prev = sortedRaw[i - 1];
+        const diff = curr.mileage - prev.mileage;
+        if (diff > BREAK_GAP_THRESHOLD) {
+          const nullPrev: any = { mileage: Number((prev.mileage + 0.001).toFixed(4)) };
+          const nullCurr: any = { mileage: Number((curr.mileage - 0.001).toFixed(4)) };
+          keysSet.forEach(k => {
+            nullPrev[k] = null;
+            nullCurr[k] = null;
+          });
+          processedData.push(nullPrev);
+          processedData.push(nullCurr);
+        }
+      }
+      processedData.push(curr);
+    }
 
     const sortedKeys = Array.from(keysSet).sort((a, b) => a.localeCompare(b));
 
@@ -159,6 +181,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
   // 自訂懸浮提示 Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
+    const validPayload = payload.filter((entry: any) => entry.value !== null && entry.value !== undefined);
+    if (validPayload.length === 0) return null;
     const m = Number(label);
     const exempt = getExemptInfoAt(m);
 
@@ -184,7 +208,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
         )}
 
         <div className="space-y-1 pt-0.5">
-          {payload.map((entry: any, i: number) => (
+          {validPayload.map((entry: any, i: number) => (
             <div key={i} className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-slate-600">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
@@ -409,7 +433,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 6 }}
-                  connectNulls={true}
+                  connectNulls={false}
                   hide={hiddenYears.has(key)}
                   strokeOpacity={hiddenYears.has(key) ? 0.2 : 1}
                 />
