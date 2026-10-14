@@ -121,3 +121,59 @@ function saveToLocalStorage(data: PavementData[], lastSync: number) {
     // 空間不足時忽略（已有 IndexedDB 作為主存儲）
   }
 }
+
+const LS_EXEMPT_KEY = 'iri_exempt_zones';
+
+/**
+ * 從 IndexedDB / localStorage 讀取免測路段資料
+ */
+export async function getExemptZonesLocal<T = any>(): Promise<T[]> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get('exempt_zones');
+      tx.oncomplete = () => {
+        const val = req.result;
+        if (Array.isArray(val) && val.length > 0) {
+          resolve(val as T[]);
+        } else {
+          resolve(getExemptFromLocalStorage<T>());
+        }
+      };
+      tx.onerror = () => resolve(getExemptFromLocalStorage<T>());
+    });
+  } catch {
+    return getExemptFromLocalStorage<T>();
+  }
+}
+
+/**
+ * 儲存免測路段資料到 IndexedDB 與 localStorage
+ */
+export async function saveExemptZonesLocal<T = any>(zones: T[]): Promise<void> {
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.put(zones, 'exempt_zones');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (_) {}
+
+  try {
+    localStorage.setItem(LS_EXEMPT_KEY, JSON.stringify(zones));
+  } catch (_) {}
+}
+
+function getExemptFromLocalStorage<T>(): T[] {
+  try {
+    const raw = localStorage.getItem(LS_EXEMPT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}

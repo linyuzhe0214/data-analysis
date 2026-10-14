@@ -156,3 +156,39 @@ export const fetchIRIData = async (nocache = false): Promise<RawIriData[]> => {
   if (!json.success) throw new Error(json.error);
   return parseRowsToObjects<RawIriData>(json.data);
 };
+
+export const EXEMPT_HEADERS = ['id', 'route', 'direction', 'type', 'start', 'end', 'mileage', 'label'];
+
+export const uploadExemptZones = async (records: any[]): Promise<UploadResult> => {
+  if (!GAS_URL) return { success: false, error: 'GAS URL 未設定' };
+  await postCsv(buildUrl(GAS_URL, { type: 'exempt' }), toCsv(EXEMPT_HEADERS, records));
+  return { success: true, inserted: records.length };
+};
+
+export const fetchExemptZones = async (nocache = false): Promise<any[]> => {
+  if (!GAS_URL) return [];
+  try {
+    const params: Record<string, string> = { type: 'exempt' };
+    if (nocache) {
+      params.nocache = '1';
+      params._t = String(Date.now());
+    }
+    const res = await fetch(buildUrl(GAS_URL, params), nocache ? { cache: 'no-store' } : {});
+    const json = await res.json();
+    if (!json.success) return [];
+    const list = parseRowsToObjects<any>(json.data);
+    return list.map(item => ({
+      id: item.id || crypto.randomUUID(),
+      route: String(item.route || ''),
+      direction: String(item.direction || ''),
+      type: item.type === 'point' ? 'point' : 'range',
+      start: item.start ? Number(item.start) : undefined,
+      end: item.end ? Number(item.end) : undefined,
+      mileage: item.mileage ? Number(item.mileage) : undefined,
+      label: String(item.label || ''),
+    }));
+  } catch (err) {
+    console.warn('[gasService] fetchExemptZones 失敗', err);
+    return [];
+  }
+};

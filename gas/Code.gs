@@ -53,8 +53,8 @@ function doPost(e) {
 
     const type = (e.parameter.type || '').toLowerCase();
 
-    if (type !== 'sn' && type !== 'iri') {
-      return jsonResponse({ success: false, error: 'type=sn or type=iri required' });
+    if (type !== 'sn' && type !== 'iri' && type !== 'exempt') {
+      return jsonResponse({ success: false, error: 'type=sn, iri or exempt required' });
     }
 
     // ── 解析 CSV body ────────────────────────────────────
@@ -81,6 +81,23 @@ function doPost(e) {
 
     if (records.length === 0) {
       return jsonResponse({ success: false, error: 'No records parsed' });
+    }
+
+    if (type === 'exempt') {
+      var EXEMPT_HEADERS = ['id', 'route', 'direction', 'type', 'start', 'end', 'mileage', 'label'];
+      var ss = SpreadsheetApp.openById(SS_ID);
+      var sheet = ss.getSheetByName('EXEMPT_ZONES');
+      if (!sheet) {
+        sheet = ss.insertSheet('EXEMPT_ZONES');
+      } else {
+        sheet.clear();
+      }
+      var rows = [EXEMPT_HEADERS];
+      records.forEach(function(r) {
+        rows.push(EXEMPT_HEADERS.map(function(h) { return r[h] !== undefined ? r[h] : ''; }));
+      });
+      sheet.getRange(1, 1, rows.length, EXEMPT_HEADERS.length).setValues(rows);
+      return jsonResponse({ success: true, inserted: records.length });
     }
 
     if (type === 'sn') {
@@ -155,6 +172,28 @@ function doGet(e) {
     if (type === 'meta') {
       const lastUpdated = PropertiesService.getScriptProperties().getProperty('LAST_UPDATED') || '0';
       return jsonResponse({ success: true, lastUpdated: Number(lastUpdated) });
+    }
+
+    if (type === 'exempt') {
+      var ss = SpreadsheetApp.openById(SS_ID);
+      var sheet = ss.getSheetByName('EXEMPT_ZONES');
+      if (!sheet) {
+        return jsonResponse({ success: true, data: [] });
+      }
+      var data = sheet.getDataRange().getValues();
+      if (data.length <= 1) {
+        return jsonResponse({ success: true, data: [] });
+      }
+      var headers = data[0];
+      var rows = [];
+      for (var i = 1; i < data.length; i++) {
+        var obj = {};
+        for (var j = 0; j < headers.length; j++) {
+          obj[headers[j]] = data[i][j];
+        }
+        rows.push(obj);
+      }
+      return jsonResponse({ success: true, data: rows });
     }
 
     if (type === 'all') {
