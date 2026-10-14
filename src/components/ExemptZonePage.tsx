@@ -1,7 +1,7 @@
-﻿import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { 
-  ShieldOff, PlusCircle, Trash2, Download, Upload, Cloud, RefreshCw, 
-  Search, Filter, CheckCircle, AlertTriangle, FileSpreadsheet, ArrowUpDown, ChevronLeft, ChevronRight
+  ShieldOff, PlusCircle, Trash2, Cloud, RefreshCw, 
+  Search, Filter, CheckCircle, AlertTriangle, ArrowUpDown, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { ExemptZone, formatMileage, parseMileageInput } from "./ExemptZoneManager";
 import { uploadExemptZones, fetchExemptZones, GAS_URL } from "../lib/gasService";
@@ -37,7 +37,6 @@ export function ExemptZonePage({ zones, routes, directions, onChange }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 篩選後的清單
   const filteredZones = useMemo(() => {
@@ -162,97 +161,10 @@ export function ExemptZonePage({ zones, routes, directions, onChange }: Props) {
     }
   };
 
-  // 匯出 CSV
-  const handleExportCSV = () => {
-    if (zones.length === 0) return;
-    const headers = ["路線", "方向", "類型", "起點公里", "終點公里", "單點公里", "起訖工程里程", "備註說明"];
-    const rows = zones.map(z => [
-      z.route,
-      z.direction || "全方向",
-      z.type === "point" ? "單點" : "範圍",
-      z.type === "range" ? z.start : "",
-      z.type === "range" ? z.end : "",
-      z.type === "point" ? z.mileage : "",
-      z.type === "point" ? formatMileage(z.mileage) : `${formatMileage(z.start)}～${formatMileage(z.end)}`,
-      `"${(z.label || "").replace(/"/g, '""')}"`
-    ]);
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `免測路段清單_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 匯入 CSV / Excel
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-      if (lines.length < 2) return;
-      const parsed: ExemptZone[] = [];
-      // 依序解析各行
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-        if (cols.length >= 4) {
-          const r = cols[0];
-          const dir = cols[1] === "全方向" ? "" : cols[1];
-          const tStr = cols[2];
-          const s = parseMileageInput(cols[3]);
-          const eVal = parseMileageInput(cols[4]);
-          const m = parseMileageInput(cols[5]);
-          const lbl = cols[7] || cols[6] || "";
-
-          if (tStr === "單點" || !isNaN(m)) {
-            parsed.push({
-              id: crypto.randomUUID(),
-              route: r,
-              direction: dir,
-              type: "point",
-              mileage: !isNaN(m) ? m : s,
-              label: lbl
-            });
-          } else if (!isNaN(s) && !isNaN(eVal)) {
-            const [minK, maxK] = s < eVal ? [s, eVal] : [eVal, s];
-            parsed.push({
-              id: crypto.randomUUID(),
-              route: r,
-              direction: dir,
-              type: "range",
-              start: minK,
-              end: maxK,
-              label: lbl
-            });
-          }
-        }
-      }
-      if (parsed.length > 0) {
-        onChange([...parsed, ...zones]);
-        setSyncMsg({ text: `成功匯入 ${parsed.length} 條免測規則！`, ok: true });
-      } else {
-        setSyncMsg({ text: "檔案內未偵測到相容格式資料", ok: false });
-      }
-    } catch (err: any) {
-      setSyncMsg({ text: `匯入失敗: ${err.message}`, ok: false });
-    }
-    e.target.value = "";
-  };
-
   const dirsForRoute = ["（全方向）", ...directions.filter(d => d !== "雙向")];
 
   return (
     <div className="space-y-6">
-      <input 
-        type="file" 
-        accept=".csv,.txt" 
-        className="hidden" 
-        ref={fileInputRef}
-        onChange={handleImportFile}
-      />
 
       {/* 頂部數據看板 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -435,26 +347,6 @@ export function ExemptZonePage({ zones, routes, directions, onChange }: Props) {
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-              title="匯入 CSV 免測清單"
-            >
-              <Upload className="w-3.5 h-3.5 text-blue-600" />
-              匯入
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-              title="匯出為 CSV 檔備份"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-600" />
-              匯出
-            </button>
-
             {GAS_URL && (
               <>
                 <button
@@ -497,7 +389,7 @@ export function ExemptZonePage({ zones, routes, directions, onChange }: Props) {
           <div className="py-16 text-center text-slate-400 space-y-2">
             <ShieldOff className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-sm font-medium text-slate-600">尚無符合條件的免測路段</p>
-            <p className="text-xs text-slate-400">請由上方表單新增，或透過匯入功能快速建立清單</p>
+            <p className="text-xs text-slate-400">請由上方表單新增路段或伸縮縫規則</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
