@@ -1179,6 +1179,9 @@ export default function App() {
                 dbData={data}
                 exemptZones={exemptZones}
                 MERGED_LANE_KEY={MERGED_LANE_KEY}
+                iriExemptMode={iriExemptMode}
+                onExemptModeChange={setIriExemptMode}
+                onNavigateToExemptZones={() => setActiveTab('exempt-zones')}
               />
             )}
 
