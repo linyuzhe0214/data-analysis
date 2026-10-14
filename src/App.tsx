@@ -879,29 +879,42 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* IRI 免測模式切換 */}
-                  {exemptZones.filter(z => z.route === selectedRoute).length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-slate-500">免測統計模式：</span>
+                  {/* IRI 免測模式切換（常駐顯示） */}
+                  <div className="flex items-center gap-2 flex-wrap bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <ShieldOff className="w-3.5 h-3.5 text-amber-600" />
+                      IRI 免測統計模式：
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {([
-                        { mode: 'all' as IriExemptMode, label: '全採納', color: 'bg-slate-600' },
-                        { mode: 'exclude' as IriExemptMode, label: '扣除免測', color: 'bg-amber-600' },
-                        { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', color: 'bg-blue-600' },
-                      ]).map(({ mode, label, color }) => (
+                        { mode: 'all' as IriExemptMode, label: '全採納', id: 'btn-mode-all', color: 'bg-slate-700' },
+                        { mode: 'exclude' as IriExemptMode, label: '扣除免測', id: 'btn-mode-exclude', color: 'bg-amber-600' },
+                        { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', id: 'btn-mode-low-accept', color: 'bg-blue-600' },
+                      ]).map(({ mode, label, id, color }) => (
                         <button
                           key={mode}
+                          id={id}
                           onClick={() => setIriExemptMode(mode)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                             iriExemptMode === mode
-                              ? `${color} text-white shadow-sm`
-                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400'
+                              ? `${color} text-white shadow-sm ring-2 ring-offset-1 ring-slate-400`
+                              : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                           }`}
                         >
                           {label}
                         </button>
                       ))}
                     </div>
-                  )}
+                    {exemptZones.filter(z => z.route === selectedRoute).length === 0 ? (
+                      <span className="text-[11px] text-slate-400 ml-auto">
+                        （目前尚未設定此路線之免測路段，請於上方「免測路段管理」新增）
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-amber-700 font-medium ml-auto bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        已啟用 {exemptZones.filter(z => z.route === selectedRoute).length} 條免測規則
+                      </span>
+                    )}
+                  </div>
 
                   {stats && (
                     <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
