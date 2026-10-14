@@ -199,104 +199,162 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     if (!availableLanes.includes(selectedLane)) setSelectedLane('全車道');
   }, [availableLanes]);
 
-  // ── 依車道分別計算施工區段群（各車道施工里程獨立限制，支援跳區域）
-  const laneSegmentsMap = useMemo<Record<string, ConstructionSegment[]>>(() => {
+  // ── 依 方向 + 車道 分別計算施工區段群（各方向各車道施工里程獨立限制，支援跳區域）
+  const dirLaneSegmentsMap = useMemo<Record<string, Record<string, ConstructionSegment[]>>>(() => {
     if (!selectedRoute || constData.length === 0) return {};
     const isAllDistrict = selectedRoute === '全轄區';
     const GAP_THRESHOLD = 0.3; // 300 公尺以上差距視為跳區
 
-    // 依車道歸類實際施工里程
-    const byLane: Record<string, number[]> = {};
+    // 依 方向 -> 車道 歸類實際施工里程
+    const grouped: Record<string, Record<string, number[]>> = {};
     const filtered = constData.filter(d =>
       (isAllDistrict || d.route === selectedRoute) &&
       (selectedDirection === '雙向' || d.direction === selectedDirection)
     );
 
     filtered.forEach(d => {
-      if (!byLane[d.lane]) byLane[d.lane] = [];
-      byLane[d.lane].push(Number(d.mileage.toFixed(3)));
+      if (!grouped[d.direction]) grouped[d.direction] = {};
+      if (!grouped[d.direction][d.lane]) grouped[d.direction][d.lane] = [];
+      grouped[d.direction][d.lane].push(Number(d.mileage.toFixed(3)));
     });
 
-    const result: Record<string, ConstructionSegment[]> = {};
+    const result: Record<string, Record<string, ConstructionSegment[]>> = {};
 
-    Object.entries(byLane).forEach(([lane, mileages]) => {
-      const ms = Array.from(new Set(mileages)).sort((a, b) => a - b);
-      if (ms.length === 0) return;
+    Object.entries(grouped).forEach(([dir, laneMap]) => {
+      result[dir] = {};
+      Object.entries(laneMap).forEach(([lane, mileages]) => {
+        const ms = Array.from(new Set(mileages)).sort((a, b) => a - b);
+        if (ms.length === 0) return;
 
-      const segs: ConstructionSegment[] = [];
-      let curStart = ms[0];
-      let curEnd = ms[0];
+        const segs: ConstructionSegment[] = [];
+        let curStart = ms[0];
+        let curEnd = ms[0];
 
-      for (let i = 1; i < ms.length; i++) {
-        const m = ms[i];
-        if (m - curEnd <= GAP_THRESHOLD) {
-          curEnd = m;
-        } else {
-          segs.push({ start: curStart, end: curEnd });
-          curStart = m;
-          curEnd = m;
+        for (let i = 1; i < ms.length; i++) {
+          const m = ms[i];
+          if (m - curEnd <= GAP_THRESHOLD) {
+            curEnd = m;
+          } else {
+            segs.push({ start: curStart, end: curEnd });
+            curStart = m;
+            curEnd = m;
+          }
         }
-      }
-      segs.push({ start: curStart, end: curEnd });
-      result[lane] = segs;
+        segs.push({ start: curStart, end: curEnd });
+        result[dir][lane] = segs;
+      });
     });
 
     return result;
   }, [constData, selectedRoute, selectedDirection]);
 
-// 區間合併工具（用於多車道施工區間聯集）
-const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): ConstructionSegment[] => {
-  if (segments.length === 0) return [];
-  const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
-  const result: ConstructionSegment[] = [{ ...sorted[0] }];
+  // 區間合併工具（用於多方向/多車道施工區間聯集）
+  const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): ConstructionSegment[] => {
+    if (segments.length === 0) return [];
+    const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
+    const result: ConstructionSegment[] = [{ ...sorted[0] }];
 
-  for (let i = 1; i < sorted.length; i++) {
-    const cur = sorted[i];
-    const last = result[result.length - 1];
+    for (let i = 1; i < sorted.length; i++) {
+      const cur = sorted[i];
+      const last = result[result.length - 1];
 
-    if (cur.start <= last.end + gapThreshold) {
-      last.end = Math.max(last.end, cur.end);
-    } else {
-      result.push({ ...cur });
+      if (cur.start <= last.end + gapThreshold) {
+        last.end = Math.max(last.end, cur.end);
+      } else {
+        result.push({ ...cur });
+      }
     }
-  }
-  return result;
-};
+    return result;
+  };
 
-  // ── 當前篩選車道對應的施工區段群
+  // ── 當前篩選條件對應的施工區段群（方向 + 車道）
   const constSegments = useMemo<ConstructionSegment[]>(() => {
-    if (Object.keys(laneSegmentsMap).length === 0) return [];
+    if (Object.keys(dirLaneSegmentsMap).length === 0) return [];
 
-    if (selectedLane !== '全車道' && selectedLane !== MERGED_LANE_KEY) {
-      // 具體單一車道：嚴格取該車道自身的施工區段（例如第1車道 178~179k）
-      return laneSegmentsMap[selectedLane] || [];
-    }
+    const dirs = selectedDirection !== '雙向'
+      ? (dirLaneSegmentsMap[selectedDirection] ? [selectedDirection] : [])
+      : Object.keys(dirLaneSegmentsMap);
 
-    if (selectedLane === MERGED_LANE_KEY) {
-      // 合併車道（第二+第三車道）聯集
-      const s2 = laneSegmentsMap['第二車道'] || [];
-      const s3 = laneSegmentsMap['第三車道'] || [];
-      return mergeIntervals([...s2, ...s3]);
-    }
+    if (dirs.length === 0) return [];
 
-    // 全車道模式：彙總所有有施工車道的區段聯集
-    const allSegments = Object.values(laneSegmentsMap).flat();
-    return mergeIntervals(allSegments);
-  }, [laneSegmentsMap, selectedLane, MERGED_LANE_KEY]);
+    const segmentsToMerge: ConstructionSegment[] = [];
 
-  // 判斷某里程與車道是否落在施工區段內（前後加 0.05km 容許誤差）
-  // 若傳入 lane，則嚴格依據該車道自身的施工區段判定；若該車道未施工，直接返回 false
-  const isInConstArea = (mileage: number, lane?: string, tolerance = 0.05): boolean => {
-    if (lane) {
-      // 具體車道判定：若該車道未在施工資料中，表示該車道未施工，排除
-      const segs = laneSegmentsMap[lane];
+    dirs.forEach(dir => {
+      const laneMap = dirLaneSegmentsMap[dir] || {};
+      if (selectedLane !== '全車道' && selectedLane !== MERGED_LANE_KEY) {
+        if (laneMap[selectedLane]) segmentsToMerge.push(...laneMap[selectedLane]);
+      } else if (selectedLane === MERGED_LANE_KEY) {
+        if (laneMap['第二車道']) segmentsToMerge.push(...laneMap['第二車道']);
+        if (laneMap['第三車道']) segmentsToMerge.push(...laneMap['第三車道']);
+      } else {
+        Object.values(laneMap).forEach(segs => segmentsToMerge.push(...segs));
+      }
+    });
+
+    return mergeIntervals(segmentsToMerge);
+  }, [dirLaneSegmentsMap, selectedDirection, selectedLane, MERGED_LANE_KEY]);
+
+  // 判斷某里程、方向與車道是否落在施工區段內（前後加 0.05km 容許誤差）
+  // 嚴格依據該方向該車道自身施工區段判定；若未施工直接返回 false
+  const isInConstArea = (mileage: number, direction?: string, lane?: string, tolerance = 0.05): boolean => {
+    if (direction && lane) {
+      const dirMap = dirLaneSegmentsMap[direction];
+      if (!dirMap) return false;
+      const segs = dirMap[lane];
       if (!segs || segs.length === 0) return false;
       return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
     }
 
-    // 未傳入 lane 時依當前選定車道的 constSegments 判定
     if (constSegments.length === 0) return false;
     return constSegments.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+  };
+
+  // ── 測點 1-to-1 配對機制：保證施工前與施工後「有效點數嚴格相符」且里程位置一一成對
+  const matchPairs = (
+    constPoints: PavementData[],
+    dbCandidates: PavementData[],
+    maxDiff = 0.05
+  ): { pairedConst: PavementData[]; pairedDb: PavementData[] } => {
+    const pairedConst: PavementData[] = [];
+    const pairedDb: PavementData[] = [];
+    const usedDbIndices = new Set<number>();
+
+    // 依 direction__lane 分組資料庫測點以提高匹配效能
+    const dbGrouped: Record<string, { item: PavementData; index: number }[]> = {};
+    dbCandidates.forEach((d, idx) => {
+      const key = `${d.direction}__${d.lane}`;
+      if (!dbGrouped[key]) dbGrouped[key] = [];
+      dbGrouped[key].push({ item: d, index: idx });
+    });
+
+    for (const cp of constPoints) {
+      const key = `${cp.direction}__${cp.lane}`;
+      const list = dbGrouped[key];
+      if (!list || list.length === 0) continue;
+
+      let bestMatch: { item: PavementData; index: number } | null = null;
+      let bestDist = Infinity;
+
+      for (const candidate of list) {
+        if (usedDbIndices.has(candidate.index)) continue;
+        const dist = Math.abs(candidate.item.mileage - cp.mileage);
+        if (dist <= maxDiff && dist < bestDist) {
+          bestDist = dist;
+          bestMatch = candidate;
+        }
+      }
+
+      if (bestMatch) {
+        usedDbIndices.add(bestMatch.index);
+        pairedConst.push(cp);
+        pairedDb.push({
+          ...bestMatch.item,
+          mileage: cp.mileage, // 里程對齊施工後測點，使走勢圖疊合與分析無雜訊
+        });
+      }
+    }
+
+    return { pairedConst, pairedDb };
   };
 
   // 施工里程極值（供圖表邊界參考）
@@ -318,7 +376,7 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
     return segments.map(s => `${s.start.toFixed(3)}k ~ ${s.end.toFixed(3)}k`).join('、') + ` (共 ${segments.length} 處施工區段)`;
   };
 
-  // ── 資料庫比對可用日期（嚴格限制落在各車道自身施工區段內，跳區或未施工車道不比對）
+  // ── 資料庫比對可用日期（嚴格限制落在各方向各車道自身施工區段內，跳區或未施工方向/車道不比對）
   const availableDbIriDates = useMemo(() => {
     if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
@@ -334,11 +392,11 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
           laneFilter(d.lane) &&
           d.iri > 0 &&
-          isInConstArea(d.mileage, d.lane)
+          isInConstArea(d.mileage, d.direction, d.lane)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, laneSegmentsMap, dbData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, dirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
 
   const availableDbSnDates = useMemo(() => {
     if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
@@ -355,11 +413,11 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
           laneFilter(d.lane) &&
           d.sn > 0 &&
-          isInConstArea(d.mileage, d.lane)
+          isInConstArea(d.mileage, d.direction, d.lane)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, laneSegmentsMap, dbData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, dirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
 
   // 自動設定預設的比對日期（優先選施工日期前最近一期）
   React.useEffect(() => {
@@ -409,6 +467,7 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
   };
 
   // ── 統計數據（施工後 vs 施工前比對）
+  // ── 統計數據（施工後 vs 施工前比對，保證有效點數相符）
   const stats = useMemo(() => {
     if (constData.length === 0 || !selectedRoute) return null;
 
@@ -426,38 +485,25 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       ? exemptZones
       : exemptZones.filter(z => z.route === selectedRoute);
 
-    // ── 施工後資料
+    // ── 施工後原始與免測過濾資料
     const rawConstIri = selectedIriDate
       ? constData.filter(d => baseFilter(d) && d.iri > 0 && d.date === selectedIriDate && laneFilter(d.lane))
       : [];
-    const constIriData = applyExempt(rawConstIri, activeZones);
-    const constExemptedCount = rawConstIri.length - constIriData.length;
+    const validConstIri = applyExempt(rawConstIri, activeZones);
+    const constExemptedCount = rawConstIri.length - validConstIri.length;
 
     const constSnData = selectedSnDate
       ? constData.filter(d => baseFilter(d) && d.sn > 0 && d.date === selectedSnDate && laneFilter(d.lane))
       : [];
 
-    const constN = constIriData.length;
-    const constAvgIri = constN > 0 ? constIriData.reduce((a, d) => a + d.iri, 0) / constN : 0;
-    const constAvgSn = constSnData.length > 0 ? constSnData.reduce((a, d) => a + d.sn, 0) / constSnData.length : 0;
-    const constIriB1 = constIriData.filter(d => d.iri >= 1.75 && d.iri < 2.0).length;
-    const constIriB2 = constIriData.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;
-    const constIriB3 = constIriData.filter(d => d.iri >= 2.5).length;
-    const pct = (c: number, total: number) => (total > 0 ? (c / total * 100).toFixed(1) : '0.0');
-    const constCountSn35 = constSnData.filter(d => d.sn > 0 && d.sn < 35).length;
-
-    // ── 施工前（資料庫）對比資料
-    let dbAvgIri = 0;
-    let dbAvgSn = 0;
-    let dbIriB1 = 0;
-    let dbIriB2 = 0;
-    let dbIriB3 = 0;
-    let dbCountSn35 = 0;
-    let dbIriCount = 0;
-    let dbSnCount = 0;
-    let dbExemptedCount = 0;
+    let evalConstIri = validConstIri;
+    let evalDbIri: PavementData[] = [];
+    let evalConstSn = constSnData;
+    let evalDbSn: PavementData[] = [];
     let dbTotalRaw = 0;
+    let dbExemptedCount = 0;
 
+    // ── 施工前（資料庫）對比資料配對
     if (compareMode && constSegments.length > 0) {
       if (selectedDbIriDate) {
         const rawDbIri = dbData.filter(d =>
@@ -465,31 +511,50 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
           d.iri > 0 &&
           d.date === selectedDbIriDate &&
           laneFilter(d.lane) &&
-          isInConstArea(d.mileage, d.lane)
+          isInConstArea(d.mileage, d.direction, d.lane)
         );
         dbTotalRaw = rawDbIri.length;
-        const dbIriData = applyExempt(rawDbIri, activeZones);
-        dbExemptedCount = rawDbIri.length - dbIriData.length;
-        dbIriCount = dbIriData.length;
-        dbAvgIri = dbIriCount > 0 ? dbIriData.reduce((a, d) => a + d.iri, 0) / dbIriCount : 0;
-        dbIriB1 = dbIriData.filter(d => d.iri >= 1.75 && d.iri < 2.0).length;
-        dbIriB2 = dbIriData.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;
-        dbIriB3 = dbIriData.filter(d => d.iri >= 2.5).length;
+        const validDbIri = applyExempt(rawDbIri, activeZones);
+        dbExemptedCount = rawDbIri.length - validDbIri.length;
+
+        // 進行 1 對 1 測點配對，使有效點數完全相符
+        const paired = matchPairs(validConstIri, validDbIri, 0.05);
+        evalConstIri = paired.pairedConst;
+        evalDbIri = paired.pairedDb;
       }
 
       if (selectedDbSnDate) {
-        const dbSnData = dbData.filter(d =>
+        const rawDbSn = dbData.filter(d =>
           baseFilter(d) &&
           d.sn > 0 &&
           d.date === selectedDbSnDate &&
           laneFilter(d.lane) &&
-          isInConstArea(d.mileage, d.lane)
+          isInConstArea(d.mileage, d.direction, d.lane)
         );
-        dbSnCount = dbSnData.length;
-        dbAvgSn = dbSnCount > 0 ? dbSnData.reduce((a, d) => a + d.sn, 0) / dbSnCount : 0;
-        dbCountSn35 = dbSnData.filter(d => d.sn > 0 && d.sn < 35).length;
+        const pairedSn = matchPairs(constSnData, rawDbSn, 0.05);
+        evalConstSn = pairedSn.pairedConst;
+        evalDbSn = pairedSn.pairedDb;
       }
     }
+
+    const constN = evalConstIri.length;
+    const constAvgIri = constN > 0 ? evalConstIri.reduce((a, d) => a + d.iri, 0) / constN : 0;
+    const constAvgSn = evalConstSn.length > 0 ? evalConstSn.reduce((a, d) => a + d.sn, 0) / evalConstSn.length : 0;
+    const constIriB1 = evalConstIri.filter(d => d.iri >= 1.75 && d.iri < 2.0).length;
+    const constIriB2 = evalConstIri.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;
+    const constIriB3 = evalConstIri.filter(d => d.iri >= 2.5).length;
+    const pct = (c: number, total: number) => (total > 0 ? (c / total * 100).toFixed(1) : '0.0');
+    const constCountSn35 = evalConstSn.filter(d => d.sn > 0 && d.sn < 35).length;
+
+    // 施工前統計（與施工後成對點位相符）
+    const dbIriCount = evalDbIri.length;
+    const dbSnCount = evalDbSn.length;
+    const dbAvgIri = dbIriCount > 0 ? evalDbIri.reduce((a, d) => a + d.iri, 0) / dbIriCount : 0;
+    const dbAvgSn = dbSnCount > 0 ? evalDbSn.reduce((a, d) => a + d.sn, 0) / dbSnCount : 0;
+    const dbIriB1 = evalDbIri.filter(d => d.iri >= 1.75 && d.iri < 2.0).length;
+    const dbIriB2 = evalDbIri.filter(d => d.iri >= 2.0 && d.iri < 2.5).length;
+    const dbIriB3 = evalDbIri.filter(d => d.iri >= 2.5).length;
+    const dbCountSn35 = evalDbSn.filter(d => d.sn > 0 && d.sn < 35).length;
 
     const improvement = dbAvgIri > 0 && constAvgIri > 0 ? (dbAvgIri - constAvgIri).toFixed(2) : null;
     const iriImprovePct = dbAvgIri > 0 && constAvgIri > 0 ? ((dbAvgIri - constAvgIri) / dbAvgIri * 100).toFixed(1) : null;
@@ -502,7 +567,7 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       constAvgIri: constAvgIri.toFixed(2),
       constAvgSn: constAvgSn.toFixed(1),
       constIriCount: constN,
-      constSnCount: constSnData.length,
+      constSnCount: evalConstSn.length,
       constTotalRaw: rawConstIri.length,
       constExemptedCount,
       constIriBands: [
@@ -512,7 +577,7 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       ],
       constCountSn35,
 
-      // 資料庫對比
+      // 資料庫對比（點數與施工後成對相符）
       dbAvgIri: dbAvgIri > 0 ? dbAvgIri.toFixed(2) : null,
       dbAvgSn: dbAvgSn > 0 ? dbAvgSn.toFixed(1) : null,
       dbIriDate: selectedDbIriDate,
@@ -538,11 +603,11 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
     };
   }, [
     constData, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate,
-    compareMode, dbData, constSegments, laneSegmentsMap, selectedDbIriDate, selectedDbSnDate,
+    compareMode, dbData, constSegments, dirLaneSegmentsMap, selectedDbIriDate, selectedDbSnDate,
     exemptZones, currentIriExemptMode, MERGED_LANE_KEY
   ]);
 
-  // ── 對比圖表資料：施工後與資料庫施工前合併繪製（施工前僅納入各車道自身施工區段內，跳區或未施工車道不顯示）
+  // ── 對比圖表資料：施工後與資料庫施工前成對合併繪製（點對點相符，跳區或未施工方向/車道不顯示）
   const combinedIriData = useMemo(() => {
     if (!compareMode || !selectedDbIriDate || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
@@ -552,31 +617,30 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       return l === selectedLane;
     };
 
-    // 施工前（跳區無施工或該車道未施工之路段不顯示、不繪製）
-    const dbPts = dbData
-      .filter(d =>
-        (isAllDistrict || d.route === selectedRoute) &&
-        (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-        laneFilter(d.lane) &&
-        d.iri > 0 &&
-        d.date === selectedDbIriDate &&
-        isInConstArea(d.mileage, d.lane)
-      )
-      .map(d => ({ ...d, date: `${selectedDbIriDate} (施工前)` }));
+    const constFiltered = constData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      d.iri > 0 &&
+      d.date === selectedIriDate
+    );
 
-    // 施工後
-    const constPts = constData
-      .filter(d =>
-        (isAllDistrict || d.route === selectedRoute) &&
-        (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-        laneFilter(d.lane) &&
-        d.iri > 0 &&
-        d.date === selectedIriDate
-      )
-      .map(d => ({ ...d, date: `${selectedIriDate} (施工後)` }));
+    const dbFiltered = dbData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      d.iri > 0 &&
+      d.date === selectedDbIriDate &&
+      isInConstArea(d.mileage, d.direction, d.lane)
+    );
+
+    const { pairedConst, pairedDb } = matchPairs(constFiltered, dbFiltered, 0.05);
+
+    const constPts = pairedConst.map(d => ({ ...d, date: `${selectedIriDate} (施工後)` }));
+    const dbPts = pairedDb.map(d => ({ ...d, date: `${selectedDbIriDate} (施工前)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbIriDate, constSegments, laneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbIriDate, constSegments, dirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
 
   const combinedSnData = useMemo(() => {
     if (!compareMode || !selectedDbSnDate || constSegments.length === 0) return [];
@@ -587,33 +651,32 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       return l === selectedLane;
     };
 
-    // 施工前（跳區無施工或該車道未施工之路段不顯示、不繪製）
-    const dbPts = dbData
-      .filter(d =>
-        (isAllDistrict || d.route === selectedRoute) &&
-        (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-        laneFilter(d.lane) &&
-        d.sn > 0 &&
-        d.date === selectedDbSnDate &&
-        isInConstArea(d.mileage, d.lane)
-      )
-      .map(d => ({ ...d, date: `${selectedDbSnDate} (施工前)` }));
+    const constFiltered = constData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      d.sn > 0 &&
+      d.date === selectedSnDate
+    );
 
-    // 施工後
-    const constPts = constData
-      .filter(d =>
-        (isAllDistrict || d.route === selectedRoute) &&
-        (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-        laneFilter(d.lane) &&
-        d.sn > 0 &&
-        d.date === selectedSnDate
-      )
-      .map(d => ({ ...d, date: `${selectedSnDate} (施工後)` }));
+    const dbFiltered = dbData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      d.sn > 0 &&
+      d.date === selectedDbSnDate &&
+      isInConstArea(d.mileage, d.direction, d.lane)
+    );
+
+    const { pairedConst, pairedDb } = matchPairs(constFiltered, dbFiltered, 0.05);
+
+    const constPts = pairedConst.map(d => ({ ...d, date: `${selectedSnDate} (施工後)` }));
+    const dbPts = pairedDb.map(d => ({ ...d, date: `${selectedDbSnDate} (施工前)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbSnDate, constSegments, laneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbSnDate, constSegments, dirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
 
-  // 單獨的施工前資料（只包含選取的比對日期與該車道施工區段範圍）
+  // 單獨的施工前資料（與施工後點位成對配對）
   const singleDbData = useMemo(() => {
     if (!compareMode || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
@@ -622,14 +685,25 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
       if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
       return l === selectedLane;
     };
-    return dbData.filter(d =>
+
+    const constFiltered = constData.filter(d =>
       (isAllDistrict || d.route === selectedRoute) &&
       (selectedDirection === '雙向' || d.direction === selectedDirection) &&
       laneFilter(d.lane) &&
-      isInConstArea(d.mileage, d.lane) &&
+      ((d.iri > 0 && d.date === selectedIriDate) || (d.sn > 0 && d.date === selectedSnDate))
+    );
+
+    const dbCandidates = dbData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      isInConstArea(d.mileage, d.direction, d.lane) &&
       (d.date === selectedDbIriDate || d.date === selectedDbSnDate)
     );
-  }, [compareMode, constSegments, selectedRoute, selectedDirection, selectedLane, dbData, selectedDbIriDate, selectedDbSnDate, laneSegmentsMap, MERGED_LANE_KEY]);
+
+    const { pairedDb } = matchPairs(constFiltered, dbCandidates, 0.05);
+    return pairedDb;
+  }, [compareMode, constSegments, selectedRoute, selectedDirection, selectedLane, dbData, selectedDbIriDate, selectedDbSnDate, dirLaneSegmentsMap, MERGED_LANE_KEY, constData, selectedIriDate, selectedSnDate]);
 
   // ── 上傳處理
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'iri' | 'sn') => {
@@ -917,11 +991,11 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
           <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
             目前依<strong>「{currentIriExemptMode === 'exclude' ? '扣除免測' : '免測但 ≤1.75 仍採納'}」</strong>模式：
-            施工後排除 <strong>{stats.constExemptedCount}</strong> 處免測點（原始 {stats.constTotalRaw} 處，有效 <strong>{stats.constIriCount}</strong> 處）
+            施工後排除 <strong>{stats.constExemptedCount}</strong> 處免測點（原始 {stats.constTotalRaw} 處，成對有效 <strong>{stats.constIriCount}</strong> 處）
             {compareMode && stats.dbIriCount > 0 && (
-              <>；資料庫比對資料排除 <strong>{stats.dbExemptedCount}</strong> 處免測點（原始 {stats.dbTotalRaw} 處，有效 <strong>{stats.dbIriCount}</strong> 處）</>
+              <>；資料庫比對資料排除 <strong>{stats.dbExemptedCount}</strong> 處免測點（原始 {stats.dbTotalRaw} 處，成對有效 <strong>{stats.dbIriCount}</strong> 處）</>
             )}
-            。平均 IRI 及各級距皆已依有效測點計算。
+            。前後比對有效點數嚴格相符，各級距與平均 IRI 皆依成對測點計算。
           </span>
         </div>
       )}
@@ -1001,11 +1075,20 @@ const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): Co
 
                 {/* 施工里程範圍 */}
                 <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-sm flex flex-col justify-between">
-                  <span className="text-xs text-slate-500 font-medium">檢測點數與比對範圍</span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    檢測點數與比對範圍 ({selectedDirection !== '雙向' ? selectedDirection : ''}{selectedLane !== '全車道' ? selectedLane : '全車道'})
+                  </span>
                   <div className="mt-1">
-                    <p className="text-xs font-bold text-slate-700">
-                      後: {stats.constIriCount} 點 / 前: {stats.dbIriCount} 點
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs font-bold text-slate-700">
+                        {compareMode ? `成對有效點: 後 ${stats.constIriCount} 點 / 前 ${stats.dbIriCount} 點` : `有效點數: ${stats.constIriCount} 點`}
+                      </p>
+                      {compareMode && stats.constIriCount === stats.dbIriCount && (
+                        <span className="text-[10px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
+                          前後相符
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-slate-500 mt-0.5 truncate" title={formatSegmentsText(constSegments)}>
                       {formatSegmentsText(constSegments)}
                     </p>
