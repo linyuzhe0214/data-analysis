@@ -1072,13 +1072,31 @@ export default function App() {
                     </div>
                   ) : (
                     <>
-                      {selectedLane !== MERGED_LANE_KEY && (
-                        <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
-                      )}
-                      {selectedLane !== MERGED_LANE_KEY && (
-                        <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
-                      )}
-                      <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" />
+                      {(() => {
+                        const targetDirs = (selectedDirection === '雙向' || !selectedDirection)
+                          ? availableDirections.filter(d => d !== '雙向')
+                          : [selectedDirection];
+
+                        if (targetDirs.length === 0) {
+                          return (
+                            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400">
+                              此條件下目前無檢測資料
+                            </div>
+                          );
+                        }
+
+                        return targetDirs.map(dir => (
+                          <div key={dir} className="space-y-6">
+                            {selectedLane !== MERGED_LANE_KEY && (
+                              <MileageTrendChart data={data} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" exemptZones={exemptZones} />
+                            )}
+                            {selectedLane !== MERGED_LANE_KEY && (
+                              <MileageTrendChart data={data} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" exemptZones={exemptZones} />
+                            )}
+                            <MileageTrendChart data={data} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" exemptZones={exemptZones} />
+                          </div>
+                        ));
+                      })()}
                     </>
                   )}
                 </div>
