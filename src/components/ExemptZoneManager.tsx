@@ -12,6 +12,50 @@ export interface ExemptZone {
   label?: string;
 }
 
+/** 將公里數格式化為 23k+000 或 23k+100 格式 */
+export const formatMileage = (km: number | undefined | null): string => {
+  if (km == null || isNaN(km)) return "0k+000";
+  const totalM = Math.round(km * 1000);
+  const k = Math.floor(totalM / 1000);
+  const m = Math.abs(totalM % 1000);
+  return `${k}k+${String(m).padStart(3, "0")}`;
+};
+
+/** 解析使用者輸入的里程字串（支援 23100 -> 23.1, 23k+100 -> 23.1, 23.1 -> 23.1, 23 -> 23.0） */
+export const parseMileageInput = (raw: string | number): number => {
+  if (typeof raw === "number") {
+    return raw >= 1000 ? raw / 1000 : raw;
+  }
+  if (!raw) return NaN;
+  const s = String(raw).trim();
+
+  // 1. 匹配 23k+100, 23K+100, 23k100, 23+100, K23+100
+  const kPlusMatch = s.match(/(?:[kK]?\s*(\d+))\s*(?:[kK]|\+|\+0*)\s*(\d+)/);
+  if (kPlusMatch) {
+    const k = parseInt(kPlusMatch[1], 10);
+    const m = parseInt(kPlusMatch[2], 10);
+    return k + m / 1000;
+  }
+
+  // 2. 匹配 K160, K23.1 等前面帶 K
+  const kPrefixMatch = s.match(/^[kK]\s*([0-9.]+)/);
+  if (kPrefixMatch) {
+    const val = parseFloat(kPrefixMatch[1]);
+    return val >= 1000 ? val / 1000 : val;
+  }
+
+  // 3. 一般數值
+  const num = parseFloat(s);
+  if (isNaN(num)) return NaN;
+
+  // 若使用者輸入整數大於等於 1000 (例如 23100, 23000, 160500) 且無小數點，視為公尺 (m) -> 轉為公里 (km)
+  if (!s.includes(".") && num >= 1000) {
+    return num / 1000;
+  }
+
+  return num;
+};
+
 interface Props {
   zones: ExemptZone[];
   routes: string[];
@@ -38,16 +82,16 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
       if (parts.length === 0) { setErr("請輸入有效里程"); return; }
       const newItems: ExemptZone[] = [];
       for (const p of parts) {
-        const m = parseFloat(p);
-        if (isNaN(m)) { setErr(`里程「${p}」非有效數值`); return; }
+        const m = parseMileageInput(p);
+        if (isNaN(m)) { setErr(`里程「${p}」無法識別（支援例：23100 或 23k+100 或 23.1）`); return; }
         newItems.push({ id: crypto.randomUUID(), route, direction, type: "point", mileage: m, label });
       }
       onChange([...zones, ...newItems]);
       setMileage("");
     } else {
-      const s = parseFloat(start);
-      const e = parseFloat(end);
-      if (isNaN(s) || isNaN(e)) { setErr("請輸入有效起迄里程"); return; }
+      const s = parseMileageInput(start);
+      const e = parseMileageInput(end);
+      if (isNaN(s) || isNaN(e)) { setErr("請輸入有效起迄里程（支援例：23000、23k+000 或 23.0）"); return; }
       if (s === e) { setErr("起點與終點里程不可相同（如為單一位置請選「單點」）"); return; }
       const [minK, maxK] = s < e ? [s, e] : [e, s];
       onChange([...zones, { id: crypto.randomUUID(), route, direction, type: "range", start: minK, end: maxK, label }]);
@@ -127,7 +171,7 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                 <input
                   id="input-exempt-point-mileage"
                   type="text"
-                  placeholder="里程 km (例: 160.2 或多點 160.2, 161.5)"
+                  placeholder="里程 (例: 23100 或 23k+100，支援逗號多筆)"
                   value={mileage}
                   onChange={e => setMileage(e.target.value)}
                   className="flex-1 min-w-[220px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
@@ -136,9 +180,8 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                 <>
                   <input
                     id="input-exempt-start-mileage"
-                    type="number"
-                    step="any"
-                    placeholder="起點里程 (km)"
+                    type="text"
+                    placeholder="起點 (例: 23100 或 23k+100)"
                     value={start}
                     onChange={e => setStart(e.target.value)}
                     className="flex-1 min-w-[140px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
@@ -146,9 +189,8 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                   <span className="text-slate-400 text-xs">～</span>
                   <input
                     id="input-exempt-end-mileage"
-                    type="number"
-                    step="any"
-                    placeholder="終點里程 (km)"
+                    type="text"
+                    placeholder="終點 (例: 24000 或 24k+000)"
                     value={end}
                     onChange={e => setEnd(e.target.value)}
                     className="flex-1 min-w-[140px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
@@ -196,20 +238,30 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
           ) : (
             <div className="space-y-1.5 max-h-60 overflow-y-auto">
               {zones.map(z => (
-                <div key={z.id} className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs">
+                <div key={z.id} className="flex items-center justify-between bg-amber-50/80 border border-amber-200/80 rounded-lg px-3 py-2 text-xs hover:bg-amber-50 transition-colors">
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <span className="shrink-0 px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded font-semibold text-[11px]">{z.type === "point" ? "單點" : "範圍"}</span>
-                    <span className="font-semibold text-slate-800 shrink-0">{z.route}</span>
-                    {z.direction && <span className="text-slate-500 shrink-0">{z.direction}</span>}
-                    <span className="text-blue-700 font-mono font-medium">
-                      {z.type === "point" ? `K${z.mileage?.toFixed(3)}` : `K${z.start?.toFixed(3)} ～ K${z.end?.toFixed(3)}`}
+                    <span className="shrink-0 px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded font-semibold text-[11px]">
+                      {z.type === "point" ? "單點" : "範圍"}
                     </span>
-                    {z.label && <span className="text-slate-500 bg-white/70 px-1.5 py-0.5 rounded border border-amber-100 truncate">{z.label}</span>}
+                    <span className="font-bold text-slate-800 shrink-0">{z.route}</span>
+                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                      z.direction ? "bg-blue-100 text-blue-700" : "bg-slate-200/70 text-slate-700"
+                    }`}>
+                      {z.direction || "全方向"}
+                    </span>
+                    <span className="text-blue-700 font-mono font-semibold tracking-wide">
+                      {z.type === "point" ? formatMileage(z.mileage) : `${formatMileage(z.start)} ～ ${formatMileage(z.end)}`}
+                    </span>
+                    {z.label && (
+                      <span className="text-slate-500 bg-white/80 px-2 py-0.5 rounded border border-amber-200 text-[11px] truncate max-w-[200px]" title={z.label}>
+                        {z.label}
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() => remove(z.id)}
-                    className="shrink-0 ml-2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                    className="shrink-0 ml-2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1 rounded hover:bg-white/50"
                     title="刪除此規則"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

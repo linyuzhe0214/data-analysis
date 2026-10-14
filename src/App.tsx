@@ -94,6 +94,7 @@ export default function App() {
 
   // 合併車道模式：當選此值時，同時篩選第二+三車道
   const MERGED_LANE_KEY = '第二+三車道 (合併)';
+  const ALL_DISTRICT_KEY = '全轄區';
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<string>('');
   const [selectedLane, setSelectedLane] = useState<string>('');
@@ -228,10 +229,14 @@ export default function App() {
     const dataRoutes = Array.from(new Set(data.map(d => d.route))) as string[];
     const predefined = ['國道1號', '國道3號', '國道4號'];
     const others = dataRoutes.filter(r => !predefined.includes(r)).sort();
-    return [...predefined.filter(r => dataRoutes.includes(r)), ...others];
+    const ordered = [...predefined.filter(r => dataRoutes.includes(r)), ...others];
+    return [ALL_DISTRICT_KEY, ...ordered];
   }, [data]);
 
   const availableDirections = useMemo(() => {
+    if (selectedRoute === ALL_DISTRICT_KEY) {
+      return ['雙向'];
+    }
     const dataDirs = Array.from(new Set(data.filter(d => d.route === selectedRoute).map(d => d.direction))).filter(Boolean).sort() as string[];
     const predefined = (selectedRoute === '國道4號') ? ['東向', '西向'] : ['南下', '北上'];
     const validPredefined = predefined.filter(d => dataDirs.includes(d));
@@ -244,6 +249,9 @@ export default function App() {
   }, [selectedRoute, data]);
 
   const availableLanes = useMemo(() => {
+    if (selectedRoute === ALL_DISTRICT_KEY) {
+      return ['全車道'];
+    }
     const routeData = data.filter(d => d.route === selectedRoute);
     const directionData = (selectedDirection === '雙向' || !selectedDirection)
       ? routeData
@@ -277,16 +285,18 @@ export default function App() {
   // 僅含有 IRI 資料的日期（不分方向，給色塊圖與統計下拉共用以確保不為空）
   const availableIriDatesByRoute = useMemo(() => {
     if (!selectedRoute) return [];
-    return Array.from(new Set(
-      data.filter(d => d.route === selectedRoute && d.iri > 0).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a));
+    const targetData = selectedRoute === ALL_DISTRICT_KEY
+      ? data.filter(d => d.iri > 0)
+      : data.filter(d => d.route === selectedRoute && d.iri > 0);
+    return Array.from(new Set(targetData.map(d => d.date))).sort((a, b) => b.localeCompare(a));
   }, [data, selectedRoute]);
 
   const availableSnDatesByRoute = useMemo(() => {
     if (!selectedRoute) return [];
-    return Array.from(new Set(
-      data.filter(d => d.route === selectedRoute && d.sn > 0).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a));
+    const targetData = selectedRoute === ALL_DISTRICT_KEY
+      ? data.filter(d => d.sn > 0)
+      : data.filter(d => d.route === selectedRoute && d.sn > 0);
+    return Array.from(new Set(targetData.map(d => d.date))).sort((a, b) => b.localeCompare(a));
   }, [data, selectedRoute]);
 
   // 給色塊圖專用的 Alias
@@ -494,21 +504,24 @@ export default function App() {
   const stats = useMemo(() => {
     if (activeTab !== 'trends') return null;
 
+    const isAllDistrict = selectedRoute === ALL_DISTRICT_KEY;
     const routeData = data.filter(d =>
-      d.route === selectedRoute &&
+      (isAllDistrict || d.route === selectedRoute) &&
       (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection)
     );
 
-    // 取得同路線的免測規則
-    const routeZones = exemptZones.filter(z => z.route === selectedRoute);
+    // 取得適用的免測規則（全轄區則納入所有路線的規則，由 isExempt 各自比對 route）
+    const activeZones = isAllDistrict
+      ? exemptZones
+      : exemptZones.filter(z => z.route === selectedRoute);
 
     // 依模式過濾 IRI 資料
     const applyExempt = (items: PavementData[]): PavementData[] => {
-      if (iriExemptMode === 'all' || routeZones.length === 0) return items;
-      if (iriExemptMode === 'exclude') return items.filter(d => !isExempt(d, routeZones));
+      if (iriExemptMode === 'all' || activeZones.length === 0) return items;
+      if (iriExemptMode === 'exclude') return items.filter(d => !isExempt(d, activeZones));
       // 'low-accept'：免測路段中 IRI ≤ 1.75 的仍保留，>1.75 的排除
       return items.filter(d => {
-        if (!isExempt(d, routeZones)) return true;
+        if (!isExempt(d, activeZones)) return true;
         return d.iri <= 1.75;
       });
     };
@@ -541,7 +554,8 @@ export default function App() {
     const countSn35 = snData.filter(d => d.sn > 0 && d.sn < 35).length;
 
     const allStatsData = [...iriData, ...snData];
-    const directions = Array.from(new Set(allStatsData.map(d => d.direction)));
+    // 車道公里數：按「路線 + 方向」分組獨立計算後加總，精準避免跨線或雙向里程被混算
+    const routeDirKeys = Array.from(new Set(allStatsData.map(d => `${d.route}:::${d.direction}`)));
 
     const calcLaneKmForGroup = (group: typeof allStatsData) => {
       const ms = Array.from(new Set<number>(group.map(d => d.mileage))).sort((a, b) => a - b);
@@ -558,8 +572,10 @@ export default function App() {
       return km;
     };
 
-    const laneLengthKm = directions.reduce((sum, dir) => {
-      return sum + calcLaneKmForGroup(allStatsData.filter(d => d.direction === dir));
+    const laneLengthKm = routeDirKeys.reduce((sum, key) => {
+      const [r, dir] = key.split(':::');
+      const group = allStatsData.filter(d => d.route === r && d.direction === dir);
+      return sum + calcLaneKmForGroup(group);
     }, 0);
 
     const isMergedLane = selectedLane === MERGED_LANE_KEY;
@@ -704,11 +720,11 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 免測路段管理面板 */}
+            {/* 免測路段管理面板（排除全轄區，以具體路線設定） */}
             {activeTab === 'trends' && (
               <ExemptZoneManager
                 zones={exemptZones}
-                routes={routes}
+                routes={routes.filter(r => r !== ALL_DISTRICT_KEY)}
                 directions={availableDirections.filter(d => d !== '雙向')}
                 onChange={setExemptZones}
               />
@@ -905,7 +921,17 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    {exemptZones.filter(z => z.route === selectedRoute).length === 0 ? (
+                    {selectedRoute === ALL_DISTRICT_KEY ? (
+                      exemptZones.length === 0 ? (
+                        <span className="text-[11px] text-slate-400 ml-auto">
+                          （全轄區目前尚未設定免測路段，請於上方「免測路段管理」新增）
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-amber-700 font-medium ml-auto bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          全轄區已啟用共 {exemptZones.length} 條免測規則
+                        </span>
+                      )
+                    ) : exemptZones.filter(z => z.route === selectedRoute).length === 0 ? (
                       <span className="text-[11px] text-slate-400 ml-auto">
                         （目前尚未設定此路線之免測路段，請於上方「免測路段管理」新增）
                       </span>
@@ -1028,13 +1054,29 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  {selectedLane !== MERGED_LANE_KEY && (
-                    <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
+                  {selectedRoute === ALL_DISTRICT_KEY ? (
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                        <TrendingUp className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800">全轄區彙總統計模式</h4>
+                      <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
+                        上方統計卡片已彙總全轄區所有路線（國道1號、國道3號、國道4號等）之平均 IRI、各階級處數與總車道公里數，並已套用各路線設定之免測扣除規則。
+                        <br />
+                        如需檢視個別路段之「歷年里程趨勢走勢圖」，請由上方「路線」下拉選單切換至單一路線。
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {selectedLane !== MERGED_LANE_KEY && (
+                        <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" />
+                      )}
+                      {selectedLane !== MERGED_LANE_KEY && (
+                        <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
+                      )}
+                      <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" />
+                    </>
                   )}
-                  {selectedLane !== MERGED_LANE_KEY && (
-                    <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" />
-                  )}
-                  <MileageTrendChart data={data} route={selectedRoute} direction={selectedDirection} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" />
                 </div>
               )
             )}
