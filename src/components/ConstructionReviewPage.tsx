@@ -68,11 +68,29 @@ const SELECT_STYLE: React.CSSProperties = {
 };
 
 export const ConstructionReviewPage: React.FC<Props> = ({ dbData, exemptZones, MERGED_LANE_KEY }) => {
-  // ── 施工資料（純記憶體，不碰 IndexedDB / GAS）
-  const [constData, setConstData] = useState<PavementData[]>([]);
-  const [fileRecords, setFileRecords] = useState<FileRecord[]>([]);
+  // ── 施工資料（sessionStorage 持久化：切分頁不清除，關閉瀏覽器才清）
+  const [constData, setConstData] = useState<PavementData[]>(() => {
+    try {
+      const s = sessionStorage.getItem('_const_data');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
+  const [fileRecords, setFileRecords] = useState<FileRecord[]>(() => {
+    try {
+      const s = sessionStorage.getItem('_const_records');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
   const [wizardState, setWizardState] = useState<WizardState | null>(null);
   const [parsing, setParsing] = useState(false);
+
+  // 同步寫入 sessionStorage
+  React.useEffect(() => {
+    try { sessionStorage.setItem('_const_data', JSON.stringify(constData)); } catch {}
+  }, [constData]);
+  React.useEffect(() => {
+    try { sessionStorage.setItem('_const_records', JSON.stringify(fileRecords)); } catch {}
+  }, [fileRecords]);
 
   // ── 篩選
   const [selectedRoute, setSelectedRoute] = useState('');
@@ -199,6 +217,24 @@ export const ConstructionReviewPage: React.FC<Props> = ({ dbData, exemptZones, M
       improvement: dbAvgIri > 0 && avgIri > 0 ? (dbAvgIri - avgIri).toFixed(2) : null,
     };
   }, [constData, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate, compareMode, dbData, MERGED_LANE_KEY]);
+
+  // ── 施工里程範圍（供對比圖過濾 dbData 用）
+  const constMileageRange = useMemo(() => {
+    if (!selectedRoute || constData.length === 0) return null;
+    const ms = constData
+      .filter(d => d.route === selectedRoute &&
+        (selectedDirection === '雙向' || d.direction === selectedDirection))
+      .map(d => d.mileage);
+    if (ms.length === 0) return null;
+    return { min: Math.min(...ms), max: Math.max(...ms) };
+  }, [constData, selectedRoute, selectedDirection]);
+
+  // 對比用 dbData：只保留施工里程範圍內（±0.01km tolerance）
+  const filteredDbData = useMemo(() => {
+    if (!compareMode || !constMileageRange) return dbData;
+    const { min, max } = constMileageRange;
+    return dbData.filter(d => d.mileage >= min - 0.01 && d.mileage <= max + 0.01);
+  }, [dbData, compareMode, constMileageRange]);
 
   // ── 上傳
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'iri' | 'sn') => {
@@ -502,7 +538,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({ dbData, exemptZones, M
               </div>
               <div className="bg-white p-4 space-y-4">
                 {selectedLane !== MERGED_LANE_KEY && (
-                  <MileageTrendChart data={constData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" exemptZones={[]} />
+                  <MileageTrendChart data={constData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" exemptZones={exemptZones} />
                 )}
                 {selectedLane !== MERGED_LANE_KEY && (
                   <MileageTrendChart data={constData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" exemptZones={[]} />
@@ -522,13 +558,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({ dbData, exemptZones, M
                 </div>
                 <div className="bg-white p-4 space-y-4">
                   {selectedLane !== MERGED_LANE_KEY && (
-                    <MileageTrendChart data={dbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" exemptZones={exemptZones} />
+                    <MileageTrendChart data={filteredDbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="iri" exemptZones={exemptZones} />
                   )}
                   {selectedLane !== MERGED_LANE_KEY && (
-                    <MileageTrendChart data={dbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" exemptZones={exemptZones} />
+                    <MileageTrendChart data={filteredDbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="prqi" exemptZones={exemptZones} />
                   )}
                   {dbCompareDates.snDate && (
-                    <MileageTrendChart data={dbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" exemptZones={exemptZones} />
+                    <MileageTrendChart data={filteredDbData} route={selectedRoute} direction={dir} lane={selectedLane} mergedLaneKey={MERGED_LANE_KEY} type="sn" exemptZones={exemptZones} />
                   )}
                 </div>
               </div>
