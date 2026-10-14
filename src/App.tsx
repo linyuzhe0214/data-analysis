@@ -6,9 +6,10 @@ import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
 import { ExportWizard } from './components/ExportWizard';
 import { MappingRule, parseWithMapping } from './lib/excelParser';
-import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, fetchAllData, fetchMetadata, GAS_URL } from './lib/gasService';
-import { getLocalData, saveLocalData, clearLocalDataStorage } from './lib/storage';
+import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, fetchAllData, fetchMetadata, uploadExemptZones, fetchExemptZones, GAS_URL } from './lib/gasService';
+import { getLocalData, saveLocalData, clearLocalDataStorage, getExemptZonesLocal, saveExemptZonesLocal } from './lib/storage';
 import { ExemptZoneManager, ExemptZone } from './components/ExemptZoneManager';
+import { ExemptZonePage } from './components/ExemptZonePage';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 type IriExemptMode = 'all' | 'exclude' | 'low-accept';
@@ -101,15 +102,8 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedIriDate, setSelectedIriDate] = useState<string>('');
   const [selectedSnDate, setSelectedSnDate] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map'>('trends');
-  const [exemptZones, setExemptZones] = useState<ExemptZone[]>(() => {
-    try {
-      const saved = localStorage.getItem('iri_exempt_zones');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map' | 'exempt-zones'>('trends');
+  const [exemptZones, setExemptZones] = useState<ExemptZone[]>([]);
   const [iriExemptMode, setIriExemptMode] = useState<IriExemptMode>(() => {
     try {
       const saved = localStorage.getItem('iri_exempt_mode');
@@ -119,11 +113,10 @@ export default function App() {
     }
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('iri_exempt_zones', JSON.stringify(exemptZones));
-    } catch {}
-  }, [exemptZones]);
+  const handleExemptZonesChange = (next: ExemptZone[]) => {
+    setExemptZones(next);
+    saveExemptZonesLocal(next);
+  };
 
   useEffect(() => {
     try {
@@ -205,15 +198,29 @@ export default function App() {
           setRawData(local.data);
           setLastSyncTime(local.lastSync);
         }
+
+        // 載入本地免測路段資料庫 (IndexedDB 秒開)
+        const localExempt = await getExemptZonesLocal<ExemptZone>();
+        if (isMounted && localExempt && localExempt.length > 0) {
+          setExemptZones(localExempt);
+        }
       } catch (err) {
         console.warn('讀取本地快取失敗', err);
       } finally {
         if (isMounted) setIsLoadingLocal(false);
       }
 
-      // 背景靜默檢查雲端更新
+      // 背景靜默檢查雲端更新（道路檢測資料 + 免測路段資料庫）
       if (isMounted && GAS_URL) {
         syncFromDB(false, true);
+
+        // 雲端同步免測路段資料庫
+        fetchExemptZones().then(cloudZones => {
+          if (isMounted && cloudZones && cloudZones.length > 0) {
+            setExemptZones(cloudZones);
+            saveExemptZonesLocal(cloudZones);
+          }
+        }).catch(() => {});
       }
     })();
 
@@ -720,18 +727,9 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* 免測路段管理面板（排除全轄區，以具體路線設定） */}
-            {activeTab === 'trends' && (
-              <ExemptZoneManager
-                zones={exemptZones}
-                routes={routes.filter(r => r !== ALL_DISTRICT_KEY)}
-                directions={availableDirections.filter(d => d !== '雙向')}
-                onChange={setExemptZones}
-              />
-            )}
-
-            {/* Filters */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
+            {/* Filters（在免測維護分頁時隱藏以維持純淨介面） */}
+            {activeTab !== 'exempt-zones' && (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
                   <Filter className="w-4 h-4" />
@@ -787,10 +785,9 @@ export default function App() {
                     </div>
                   </>
                 )}
-
-
               </div>
             </div>
+          )}
 
             {/* 上傳結果列表 */}
             {uploadResults.length > 0 && (
@@ -885,6 +882,23 @@ export default function App() {
                   IRI 色塊圖
                 </div>
               </button>
+              <button
+                id="tab-exempt-zones"
+                onClick={() => setActiveTab('exempt-zones')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  activeTab === 'exempt-zones'
+                    ? 'border-amber-600 text-amber-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <ShieldOff className="w-4 h-4" />
+                免測路段維護
+                {exemptZones.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                    {exemptZones.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -921,25 +935,15 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    {selectedRoute === ALL_DISTRICT_KEY ? (
-                      exemptZones.length === 0 ? (
-                        <span className="text-[11px] text-slate-400 ml-auto">
-                          （全轄區目前尚未設定免測路段，請於上方「免測路段管理」新增）
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-amber-700 font-medium ml-auto bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          全轄區已啟用共 {exemptZones.length} 條免測規則
-                        </span>
-                      )
-                    ) : exemptZones.filter(z => z.route === selectedRoute).length === 0 ? (
-                      <span className="text-[11px] text-slate-400 ml-auto">
-                        （目前尚未設定此路線之免測路段，請於上方「免測路段管理」新增）
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-amber-700 font-medium ml-auto bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        已啟用 {exemptZones.filter(z => z.route === selectedRoute).length} 條免測規則
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('exempt-zones')}
+                      className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="前往專屬分頁維護免測路段資料庫"
+                    >
+                      <span>前往維護免測路段 ({exemptZones.length})</span>
+                      <span>→</span>
+                    </button>
                   </div>
 
                   {stats && (
@@ -1116,6 +1120,15 @@ export default function App() {
                 </div>
               );
             })()}
+
+            {activeTab === 'exempt-zones' && (
+              <ExemptZonePage
+                zones={exemptZones}
+                routes={routes.filter(r => r !== ALL_DISTRICT_KEY)}
+                directions={['南下', '北上', '東向', '西向']}
+                onChange={handleExemptZonesChange}
+              />
+            )}
 
           </div>
         )}
