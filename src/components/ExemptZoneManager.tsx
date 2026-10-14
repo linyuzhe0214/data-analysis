@@ -100,12 +100,11 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
     setLabel("");
   };
 
-  const remove = (id: string) => onChange(zones.filter(z => z.id !== id));
   const clearAll = () => {
-    if (window.confirm("確定要清空所有免測路段規則嗎？")) {
-      onChange([]);
-    }
+    onChange([]);
   };
+
+  const remove = (id: string) => onChange(zones.filter(z => z.id !== id));
 
   const dirsForRoute = ["（全方向）", ...directions.filter(d => d !== "雙向")];
 
@@ -226,8 +225,10 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                 id="btn-exempt-clear-all"
                 type="button"
                 onClick={clearAll}
-                className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded transition-all cursor-pointer font-medium"
+                title="清空所有免測規則"
               >
+                <Trash2 className="w-3 h-3" />
                 清空全部
               </button>
             )}
