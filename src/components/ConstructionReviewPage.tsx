@@ -199,40 +199,102 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     if (!availableLanes.includes(selectedLane)) setSelectedLane('全車道');
   }, [availableLanes]);
 
-  // ── 施工區段群（支援跳區域，例如 173~180, 190~192）
-  const constSegments = useMemo<ConstructionSegment[]>(() => {
-    if (!selectedRoute || constData.length === 0) return [];
+  // ── 依車道分別計算施工區段群（各車道施工里程獨立限制，支援跳區域）
+  const laneSegmentsMap = useMemo<Record<string, ConstructionSegment[]>>(() => {
+    if (!selectedRoute || constData.length === 0) return {};
     const isAllDistrict = selectedRoute === '全轄區';
-    const ms = Array.from(new Set(
-      constData
-        .filter(d => (isAllDistrict || d.route === selectedRoute) &&
-          (selectedDirection === '雙向' || d.direction === selectedDirection))
-        .map(d => Number(d.mileage.toFixed(3)))
-    )).sort((a, b) => a - b);
+    const GAP_THRESHOLD = 0.3; // 300 公尺以上差距視為跳區
 
-    if (ms.length === 0) return [];
+    // 依車道歸類實際施工里程
+    const byLane: Record<string, number[]> = {};
+    const filtered = constData.filter(d =>
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection)
+    );
 
-    const GAP_THRESHOLD = 0.3; // 300 公尺以上差距即視為跳區（非連續施工區段）
-    const segs: ConstructionSegment[] = [];
-    let curStart = ms[0];
-    let curEnd = ms[0];
+    filtered.forEach(d => {
+      if (!byLane[d.lane]) byLane[d.lane] = [];
+      byLane[d.lane].push(Number(d.mileage.toFixed(3)));
+    });
 
-    for (let i = 1; i < ms.length; i++) {
-      const m = ms[i];
-      if (m - curEnd <= GAP_THRESHOLD) {
-        curEnd = m;
-      } else {
-        segs.push({ start: curStart, end: curEnd });
-        curStart = m;
-        curEnd = m;
+    const result: Record<string, ConstructionSegment[]> = {};
+
+    Object.entries(byLane).forEach(([lane, mileages]) => {
+      const ms = Array.from(new Set(mileages)).sort((a, b) => a - b);
+      if (ms.length === 0) return;
+
+      const segs: ConstructionSegment[] = [];
+      let curStart = ms[0];
+      let curEnd = ms[0];
+
+      for (let i = 1; i < ms.length; i++) {
+        const m = ms[i];
+        if (m - curEnd <= GAP_THRESHOLD) {
+          curEnd = m;
+        } else {
+          segs.push({ start: curStart, end: curEnd });
+          curStart = m;
+          curEnd = m;
+        }
       }
-    }
-    segs.push({ start: curStart, end: curEnd });
-    return segs;
+      segs.push({ start: curStart, end: curEnd });
+      result[lane] = segs;
+    });
+
+    return result;
   }, [constData, selectedRoute, selectedDirection]);
 
-  // 判斷某里程是否落在施工區段內（前後加 0.05km 容許誤差，跳區者返回 false）
-  const isInConstArea = (mileage: number, tolerance = 0.05): boolean => {
+// 區間合併工具（用於多車道施工區間聯集）
+const mergeIntervals = (segments: ConstructionSegment[], gapThreshold = 0.3): ConstructionSegment[] => {
+  if (segments.length === 0) return [];
+  const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
+  const result: ConstructionSegment[] = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i];
+    const last = result[result.length - 1];
+
+    if (cur.start <= last.end + gapThreshold) {
+      last.end = Math.max(last.end, cur.end);
+    } else {
+      result.push({ ...cur });
+    }
+  }
+  return result;
+};
+
+  // ── 當前篩選車道對應的施工區段群
+  const constSegments = useMemo<ConstructionSegment[]>(() => {
+    if (Object.keys(laneSegmentsMap).length === 0) return [];
+
+    if (selectedLane !== '全車道' && selectedLane !== MERGED_LANE_KEY) {
+      // 具體單一車道：嚴格取該車道自身的施工區段（例如第1車道 178~179k）
+      return laneSegmentsMap[selectedLane] || [];
+    }
+
+    if (selectedLane === MERGED_LANE_KEY) {
+      // 合併車道（第二+第三車道）聯集
+      const s2 = laneSegmentsMap['第二車道'] || [];
+      const s3 = laneSegmentsMap['第三車道'] || [];
+      return mergeIntervals([...s2, ...s3]);
+    }
+
+    // 全車道模式：彙總所有有施工車道的區段聯集
+    const allSegments = Object.values(laneSegmentsMap).flat();
+    return mergeIntervals(allSegments);
+  }, [laneSegmentsMap, selectedLane, MERGED_LANE_KEY]);
+
+  // 判斷某里程與車道是否落在施工區段內（前後加 0.05km 容許誤差）
+  // 若傳入 lane，則嚴格依據該車道自身的施工區段判定；若該車道未施工，直接返回 false
+  const isInConstArea = (mileage: number, lane?: string, tolerance = 0.05): boolean => {
+    if (lane) {
+      // 具體車道判定：若該車道未在施工資料中，表示該車道未施工，排除
+      const segs = laneSegmentsMap[lane];
+      if (!segs || segs.length === 0) return false;
+      return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+    }
+
+    // 未傳入 lane 時依當前選定車道的 constSegments 判定
     if (constSegments.length === 0) return false;
     return constSegments.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
   };
@@ -247,7 +309,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     };
   }, [constSegments]);
 
-  // 格式化施工區間文字（例如：173.000k ~ 180.000k、190.000k ~ 192.000k）
+  // 格式化施工區間文字（例如：178.000k ~ 179.000k）
   const formatSegmentsText = (segments: ConstructionSegment[]): string => {
     if (segments.length === 0) return '無里程資料';
     if (segments.length === 1) {
@@ -256,36 +318,48 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     return segments.map(s => `${s.start.toFixed(3)}k ~ ${s.end.toFixed(3)}k`).join('、') + ` (共 ${segments.length} 處施工區段)`;
   };
 
-  // ── 資料庫比對可用日期（嚴格限制落在施工區段內，跳區無施工處不比對）
+  // ── 資料庫比對可用日期（嚴格限制落在各車道自身施工區段內，跳區或未施工車道不比對）
   const availableDbIriDates = useMemo(() => {
     if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
+    const laneFilter = (l: string) => {
+      if (selectedLane === '全車道') return true;
+      if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
+      return l === selectedLane;
+    };
     return Array.from(new Set(
       dbData
         .filter(d =>
           (isAllDistrict || d.route === selectedRoute) &&
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+          laneFilter(d.lane) &&
           d.iri > 0 &&
-          isInConstArea(d.mileage)
+          isInConstArea(d.mileage, d.lane)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, constSegments, dbData]);
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, laneSegmentsMap, dbData, MERGED_LANE_KEY]);
 
   const availableDbSnDates = useMemo(() => {
     if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
+    const laneFilter = (l: string) => {
+      if (selectedLane === '全車道') return true;
+      if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
+      return l === selectedLane;
+    };
     return Array.from(new Set(
       dbData
         .filter(d =>
           (isAllDistrict || d.route === selectedRoute) &&
           (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+          laneFilter(d.lane) &&
           d.sn > 0 &&
-          isInConstArea(d.mileage)
+          isInConstArea(d.mileage, d.lane)
         )
         .map(d => d.date)
     )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, constSegments, dbData]);
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, laneSegmentsMap, dbData, MERGED_LANE_KEY]);
 
   // 自動設定預設的比對日期（優先選施工日期前最近一期）
   React.useEffect(() => {
@@ -391,7 +465,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
           d.iri > 0 &&
           d.date === selectedDbIriDate &&
           laneFilter(d.lane) &&
-          isInConstArea(d.mileage)
+          isInConstArea(d.mileage, d.lane)
         );
         dbTotalRaw = rawDbIri.length;
         const dbIriData = applyExempt(rawDbIri, activeZones);
@@ -409,7 +483,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
           d.sn > 0 &&
           d.date === selectedDbSnDate &&
           laneFilter(d.lane) &&
-          isInConstArea(d.mileage)
+          isInConstArea(d.mileage, d.lane)
         );
         dbSnCount = dbSnData.length;
         dbAvgSn = dbSnCount > 0 ? dbSnData.reduce((a, d) => a + d.sn, 0) / dbSnCount : 0;
@@ -464,11 +538,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     };
   }, [
     constData, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate,
-    compareMode, dbData, constSegments, selectedDbIriDate, selectedDbSnDate,
+    compareMode, dbData, constSegments, laneSegmentsMap, selectedDbIriDate, selectedDbSnDate,
     exemptZones, currentIriExemptMode, MERGED_LANE_KEY
   ]);
 
-  // ── 對比圖表資料：施工後與資料庫施工前合併繪製（施工前僅納入施工區段內，跳區不顯示）
+  // ── 對比圖表資料：施工後與資料庫施工前合併繪製（施工前僅納入各車道自身施工區段內，跳區或未施工車道不顯示）
   const combinedIriData = useMemo(() => {
     if (!compareMode || !selectedDbIriDate || constSegments.length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
@@ -478,7 +552,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    // 施工前（跳區無施工之路段不顯示、不繪製）
+    // 施工前（跳區無施工或該車道未施工之路段不顯示、不繪製）
     const dbPts = dbData
       .filter(d =>
         (isAllDistrict || d.route === selectedRoute) &&
@@ -486,7 +560,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
         laneFilter(d.lane) &&
         d.iri > 0 &&
         d.date === selectedDbIriDate &&
-        isInConstArea(d.mileage)
+        isInConstArea(d.mileage, d.lane)
       )
       .map(d => ({ ...d, date: `${selectedDbIriDate} (施工前)` }));
 
@@ -502,7 +576,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       .map(d => ({ ...d, date: `${selectedIriDate} (施工後)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbIriDate, constSegments, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbIriDate, constSegments, laneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
 
   const combinedSnData = useMemo(() => {
     if (!compareMode || !selectedDbSnDate || constSegments.length === 0) return [];
@@ -513,7 +587,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    // 施工前（跳區無施工之路段不顯示、不繪製）
+    // 施工前（跳區無施工或該車道未施工之路段不顯示、不繪製）
     const dbPts = dbData
       .filter(d =>
         (isAllDistrict || d.route === selectedRoute) &&
@@ -521,7 +595,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
         laneFilter(d.lane) &&
         d.sn > 0 &&
         d.date === selectedDbSnDate &&
-        isInConstArea(d.mileage)
+        isInConstArea(d.mileage, d.lane)
       )
       .map(d => ({ ...d, date: `${selectedDbSnDate} (施工前)` }));
 
@@ -537,16 +611,25 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       .map(d => ({ ...d, date: `${selectedSnDate} (施工後)` }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbSnDate, constSegments, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbSnDate, constSegments, laneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
 
-  // 單獨的施工前資料（只包含選取的比對日期與施工區段範圍）
+  // 單獨的施工前資料（只包含選取的比對日期與該車道施工區段範圍）
   const singleDbData = useMemo(() => {
     if (!compareMode || constSegments.length === 0) return [];
+    const isAllDistrict = selectedRoute === '全轄區';
+    const laneFilter = (l: string) => {
+      if (selectedLane === '全車道') return true;
+      if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
+      return l === selectedLane;
+    };
     return dbData.filter(d =>
-      isInConstArea(d.mileage) &&
+      (isAllDistrict || d.route === selectedRoute) &&
+      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+      laneFilter(d.lane) &&
+      isInConstArea(d.mileage, d.lane) &&
       (d.date === selectedDbIriDate || d.date === selectedDbSnDate)
     );
-  }, [compareMode, constSegments, dbData, selectedDbIriDate, selectedDbSnDate]);
+  }, [compareMode, constSegments, selectedRoute, selectedDirection, selectedLane, dbData, selectedDbIriDate, selectedDbSnDate, laneSegmentsMap, MERGED_LANE_KEY]);
 
   // ── 上傳處理
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'iri' | 'sn') => {
