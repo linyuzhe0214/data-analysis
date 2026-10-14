@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff } from 'lucide-react';
+import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff, HardHat } from 'lucide-react';
 import { PavementData } from './types';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
@@ -10,6 +10,7 @@ import { uploadSNData, uploadIRIData, fetchSNData, fetchIRIData, fetchAllData, f
 import { getLocalData, saveLocalData, clearLocalDataStorage, getExemptZonesLocal, saveExemptZonesLocal } from './lib/storage';
 import { ExemptZoneManager, ExemptZone } from './components/ExemptZoneManager';
 import { ExemptZonePage } from './components/ExemptZonePage';
+import { ConstructionReviewPage } from './components/ConstructionReviewPage';
 
 type UploadStatus = 'idle' | 'parsing' | 'uploading' | 'done' | 'error';
 type IriExemptMode = 'all' | 'exclude' | 'low-accept';
@@ -102,7 +103,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedIriDate, setSelectedIriDate] = useState<string>('');
   const [selectedSnDate, setSelectedSnDate] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map' | 'exempt-zones'>('trends');
+  const [activeTab, setActiveTab] = useState<'trends' | 'iri-map' | 'exempt-zones' | 'construction'>('trends');
   const [exemptZones, setExemptZones] = useState<ExemptZone[]>([]);
   const [iriExemptMode, setIriExemptMode] = useState<IriExemptMode>(() => {
     try {
@@ -855,10 +856,10 @@ export default function App() {
             )}
 
             {/* Tabs Navigation */}
-            <div className="flex border-b border-slate-200">
+            <div className="flex border-b border-slate-200 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('trends')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === 'trends'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -871,7 +872,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setActiveTab('iri-map')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === 'iri-map'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -885,7 +886,7 @@ export default function App() {
               <button
                 id="tab-exempt-zones"
                 onClick={() => setActiveTab('exempt-zones')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
                   activeTab === 'exempt-zones'
                     ? 'border-amber-600 text-amber-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -898,6 +899,21 @@ export default function App() {
                     {exemptZones.length}
                   </span>
                 )}
+              </button>
+              <button
+                id="tab-construction"
+                onClick={() => setActiveTab('construction')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === 'construction'
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <HardHat className="w-4 h-4" />
+                施工品質檢視
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-600">
+                  暫存
+                </span>
               </button>
             </div>
 
@@ -1145,6 +1161,14 @@ export default function App() {
                 routes={routes.filter(r => r !== ALL_DISTRICT_KEY)}
                 directions={['南下', '北上', '東向', '西向']}
                 onChange={handleExemptZonesChange}
+              />
+            )}
+
+            {activeTab === 'construction' && (
+              <ConstructionReviewPage
+                dbData={data}
+                exemptZones={exemptZones}
+                MERGED_LANE_KEY={MERGED_LANE_KEY}
               />
             )}
 
