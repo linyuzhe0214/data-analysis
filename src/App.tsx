@@ -1086,20 +1086,30 @@ export default function App() {
                         如需檢視個別路段之「歷年里程趨勢走勢圖」，請由上方「路線」下拉選單切換至單一路線。
                       </p>
                     </div>
+                  ) : (selectedDirection === '雙向' || !selectedDirection) ? (
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                        <TrendingUp className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-700">請選擇具體方向以顯示趨勢圖</h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        目前篩選為「雙向」，趨勢圖需指定單一方向（如南下 / 北上）才能顯示。
+                      </p>
+                    </div>
+                  ) : (selectedLane === '全車道' || !selectedLane) ? (
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                        <TrendingUp className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-700">請選擇具體車道以顯示趨勢圖</h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        目前篩選為「全車道」，趨勢圖需指定單一車道（如外側車道）才能顯示。
+                      </p>
+                    </div>
                   ) : (
                     <>
                       {(() => {
-                        const targetDirs = (selectedDirection === '雙向' || !selectedDirection)
-                          ? availableDirections.filter(d => d !== '雙向')
-                          : [selectedDirection];
-
-                        if (targetDirs.length === 0) {
-                          return (
-                            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400">
-                              此條件下目前無檢測資料
-                            </div>
-                          );
-                        }
+                        const targetDirs = [selectedDirection];
 
                         return targetDirs.map(dir => (
                           <div key={dir} className="space-y-6">

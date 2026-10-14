@@ -232,7 +232,7 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
           </p>
         </div>
 
-        {relevantExemptZones.length > 0 && (
+        {type === 'iri' && relevantExemptZones.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {/* 免測標記小圖例說明 */}
             <div className="flex items-center gap-3 text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
@@ -349,8 +349,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
               </>
             )}
 
-            {/* 免測路段標記：區間 (ReferenceArea) 與 單點 (ReferenceLine) */}
-            {showExemptMarkers && visibleExemptZones.map((z, idx) => {
+            {/* 免測路段標記：僅 IRI 圖顯示 */}
+            {type === 'iri' && showExemptMarkers && visibleExemptZones.map((z, idx) => {
               if (z.type === 'range') {
                 return (
                   <ReferenceArea
