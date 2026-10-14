@@ -373,8 +373,8 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     const improvement = dbAvgIri > 0 && constAvgIri > 0 ? (dbAvgIri - constAvgIri).toFixed(2) : null;
     const iriImprovePct = dbAvgIri > 0 && constAvgIri > 0 ? ((dbAvgIri - constAvgIri) / dbAvgIri * 100).toFixed(1) : null;
     const snDiff = dbAvgSn > 0 && constAvgSn > 0 ? (constAvgSn - dbAvgSn).toFixed(1) : null;
-    const badBefore = dbIriB2 + dbIriB3;
-    const badAfter = constIriB2 + constIriB3;
+    const badBefore = dbIriB1 + dbIriB2 + dbIriB3;
+    const badAfter = constIriB1 + constIriB2 + constIriB3;
     const badDiff = badBefore - badAfter;
 
     return {
@@ -826,9 +826,9 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* 不良路段 (IRI ≥ 2.0) 減少量 */}
+                {/* 不良路段 (IRI ≥ 1.75) 減少量 */}
                 <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-sm flex flex-col justify-between">
-                  <span className="text-xs text-slate-500 font-medium">不良路段 (IRI ≥ 2.0)</span>
+                  <span className="text-xs text-slate-500 font-medium">不良路段 (IRI ≥ 1.75)</span>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-xl font-extrabold text-slate-800">{stats.badAfter} 處</span>
                     <span className="text-xs text-slate-400">前: {stats.badBefore} 處</span>
