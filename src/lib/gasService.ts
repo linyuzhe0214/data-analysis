@@ -182,9 +182,9 @@ export const fetchExemptZones = async (nocache = false): Promise<any[]> => {
       route: String(item.route || ''),
       direction: String(item.direction || ''),
       type: item.type === 'point' ? 'point' : 'range',
-      start: item.start ? Number(item.start) : undefined,
-      end: item.end ? Number(item.end) : undefined,
-      mileage: item.mileage ? Number(item.mileage) : undefined,
+      start: item.start !== undefined && item.start !== '' && !isNaN(Number(item.start)) ? Number(item.start) : undefined,
+      end: item.end !== undefined && item.end !== '' && !isNaN(Number(item.end)) ? Number(item.end) : undefined,
+      mileage: item.mileage !== undefined && item.mileage !== '' && !isNaN(Number(item.mileage)) ? Number(item.mileage) : undefined,
       label: String(item.label || ''),
     }));
   } catch (err) {

@@ -58,3 +58,29 @@ export const getPrqiColor = (prqi: number) => {
   return 'bg-red-500';
 };
 
+const CHINESE_DIGITS: Record<string, string> = {
+  '一': '1', '二': '2', '三': '3', '四': '4', '五': '5',
+  '六': '6', '七': '7', '八': '8', '九': '9', '十': '10',
+};
+
+export const normalizeRouteName = (raw: string | undefined | null): string => {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  const m = s.match(/(?:國道?|國|F|Freeway)\s*([0-9一二三四五六七八九十]+)\s*號?/i);
+  if (m) {
+    const digit = CHINESE_DIGITS[m[1]] ?? m[1];
+    return `國道${digit}號`;
+  }
+  return s;
+};
+
+export const normalizeDirection = (raw: string | undefined | null): string => {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (s.includes('南') || s === 'S') return '南下';
+  if (s.includes('北') || s === 'N') return '北上';
+  if (s.includes('東') || s === 'E') return '東向';
+  if (s.includes('西') || s === 'W') return '西向';
+  return s;
+};
+

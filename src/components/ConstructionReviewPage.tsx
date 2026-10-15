@@ -4,7 +4,7 @@ import {
   Loader2, GitCompare, Compass, Layers, Map, TrendingUp,
   ShieldOff, ShieldAlert, ArrowDown, ArrowUp, Calendar
 } from 'lucide-react';
-import { PavementData } from '../types';
+import { PavementData, normalizeRouteName, normalizeDirection } from '../types';
 import { MileageTrendChart } from './MileageTrendChart';
 import { ExemptZone } from './ExemptZoneManager';
 import { MappingRule, parseWithMapping } from '../lib/excelParser';
@@ -90,7 +90,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({
   const [constData, setConstData] = useState<PavementData[]>(() => {
     try {
       const s = sessionStorage.getItem('_const_data');
-      return s ? JSON.parse(s) : [];
+      if (!s) return [];
+      const parsed = JSON.parse(s) as PavementData[];
+      return parsed.map(d => ({
+        ...d,
+        route: normalizeRouteName(d.route),
+        direction: normalizeDirection(d.direction),
+      }));
     } catch { return []; }
   });
   const [fileRecords, setFileRecords] = useState<FileRecord[]>(() => {
@@ -120,6 +126,12 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     }
   });
 
+  React.useEffect(() => {
+    if (propIriExemptMode) {
+      setLocalIriExemptMode(propIriExemptMode);
+    }
+  }, [propIriExemptMode]);
+
   const currentIriExemptMode = propIriExemptMode || localIriExemptMode;
 
   const handleModeChange = (mode: IriExemptMode) => {
@@ -144,15 +156,17 @@ export const ConstructionReviewPage: React.FC<Props> = ({
   const iriFileRef = useRef<HTMLInputElement>(null);
   const snFileRef = useRef<HTMLInputElement>(null);
 
+  const AUTO_LATEST_KEY = '__AUTO_MAX__';
+
   // ── 派生選項
   const routes = useMemo(() => {
-    const list = Array.from(new Set(constData.map(d => d.route))).sort();
+    const list = Array.from(new Set(constData.map(d => normalizeRouteName(d.route)))).filter(r => r && r !== '未知路線').sort();
     return ['全轄區', ...list];
   }, [constData]);
 
   const availableDirections = useMemo(() => {
     const dirs = Array.from(new Set(
-      constData.filter(d => !selectedRoute || selectedRoute === '全轄區' || d.route === selectedRoute).map(d => d.direction)
+      constData.filter(d => !selectedRoute || selectedRoute === '全轄區' || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)).map(d => normalizeDirection(d.direction))
     )).filter(Boolean).sort() as string[];
     return ['雙向', ...dirs];
   }, [constData, selectedRoute]);
@@ -160,38 +174,110 @@ export const ConstructionReviewPage: React.FC<Props> = ({
   const availableLanes = useMemo(() => {
     const lanes = Array.from(new Set(
       constData
-        .filter(d => (!selectedRoute || selectedRoute === '全轄區' || d.route === selectedRoute) &&
-          (selectedDirection === '雙向' || d.direction === selectedDirection))
+        .filter(d => (!selectedRoute || selectedRoute === '全轄區' || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+          (selectedDirection === '雙向' || normalizeDirection(d.direction) === normalizeDirection(selectedDirection)))
         .map(d => d.lane)
     )).filter(Boolean) as string[];
     return ['全車道', ...lanes];
   }, [constData, selectedRoute, selectedDirection]);
 
-  const availableIriDates = useMemo(() =>
-    Array.from(new Set(
-      constData.filter(d => d.iri > 0 && (!selectedRoute || selectedRoute === '全轄區' || d.route === selectedRoute)).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a))
-  , [constData, selectedRoute]);
+  const availableIriDates = useMemo(() => {
+    const isAllDistrict = selectedRoute === '全轄區';
+    const dates = Array.from(new Set(
+      constData.filter(d => d.iri > 0 && (!selectedRoute || isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute))).map(d => d.date)
+    )).filter(Boolean).sort((a, b) => b.localeCompare(a));
 
-  const availableSnDates = useMemo(() =>
-    Array.from(new Set(
-      constData.filter(d => d.sn > 0 && (!selectedRoute || selectedRoute === '全轄區' || d.route === selectedRoute)).map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a))
-  , [constData, selectedRoute]);
+    if (isAllDistrict && dates.length > 0) {
+      return [AUTO_LATEST_KEY, ...dates];
+    }
+    return dates;
+  }, [constData, selectedRoute]);
+
+  const availableSnDates = useMemo(() => {
+    const isAllDistrict = selectedRoute === '全轄區';
+    const dates = Array.from(new Set(
+      constData.filter(d => d.sn > 0 && (!selectedRoute || isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute))).map(d => d.date)
+    )).filter(Boolean).sort((a, b) => b.localeCompare(a));
+
+    if (isAllDistrict && dates.length > 0) {
+      return [AUTO_LATEST_KEY, ...dates];
+    }
+    return dates;
+  }, [constData, selectedRoute]);
 
   // ── 自動初始化選項
   React.useEffect(() => {
-    if (routes.length > 0 && !routes.includes(selectedRoute)) {
-      const actualRoutes = routes.filter(r => r !== '全轄區');
-      setSelectedRoute(actualRoutes.length > 0 ? actualRoutes[0] : routes[0]);
+    if (selectedRoute && selectedRoute !== '全轄區') {
+      const norm = normalizeRouteName(selectedRoute);
+      if (norm !== selectedRoute && routes.includes(norm)) {
+        setSelectedRoute(norm);
+        return;
+      }
     }
-  }, [routes]);
+    if (routes.length > 0 && !routes.includes(selectedRoute)) {
+      setSelectedRoute(routes[0]);
+    }
+  }, [routes, selectedRoute]);
+
+  // 當路線切換時，全轄區強制預設啟用 AUTO_LATEST_KEY (測站最大化)
+  const prevRouteRef = useRef(selectedRoute);
   React.useEffect(() => {
-    if (availableIriDates.length > 0 && !availableIriDates.includes(selectedIriDate)) setSelectedIriDate(availableIriDates[0]);
-  }, [availableIriDates]);
+    if (prevRouteRef.current !== selectedRoute) {
+      if (selectedRoute === '全轄區') {
+        setSelectedIriDate(AUTO_LATEST_KEY);
+        setSelectedSnDate(AUTO_LATEST_KEY);
+        setSelectedDbIriDate(AUTO_LATEST_KEY);
+        setSelectedDbSnDate(AUTO_LATEST_KEY);
+      } else {
+        if (selectedIriDate === AUTO_LATEST_KEY) {
+          const valid = availableIriDates.filter(d => d !== AUTO_LATEST_KEY);
+          setSelectedIriDate(valid[0] || '');
+        }
+        if (selectedSnDate === AUTO_LATEST_KEY) {
+          const valid = availableSnDates.filter(d => d !== AUTO_LATEST_KEY);
+          setSelectedSnDate(valid[0] || '');
+        }
+        if (selectedDbIriDate === AUTO_LATEST_KEY) {
+          setSelectedDbIriDate('');
+        }
+        if (selectedDbSnDate === AUTO_LATEST_KEY) {
+          setSelectedDbSnDate('');
+        }
+      }
+      prevRouteRef.current = selectedRoute;
+    }
+  }, [selectedRoute, availableIriDates, availableSnDates, selectedIriDate, selectedSnDate, selectedDbIriDate, selectedDbSnDate]);
+
   React.useEffect(() => {
-    if (availableSnDates.length > 0 && !availableSnDates.includes(selectedSnDate)) setSelectedSnDate(availableSnDates[0]);
-  }, [availableSnDates]);
+    if (availableIriDates.length > 0) {
+      if (selectedRoute === '全轄區' && availableIriDates.includes(AUTO_LATEST_KEY)) {
+        if (!selectedIriDate) {
+          setSelectedIriDate(AUTO_LATEST_KEY);
+        }
+      } else if (!selectedIriDate || !availableIriDates.includes(selectedIriDate) || (selectedRoute !== '全轄區' && selectedIriDate === AUTO_LATEST_KEY)) {
+        const validDates = availableIriDates.filter(d => d !== AUTO_LATEST_KEY);
+        setSelectedIriDate(validDates[0] || availableIriDates[0]);
+      }
+    } else {
+      setSelectedIriDate('');
+    }
+  }, [availableIriDates, selectedRoute, selectedIriDate]);
+
+  React.useEffect(() => {
+    if (availableSnDates.length > 0) {
+      if (selectedRoute === '全轄區' && availableSnDates.includes(AUTO_LATEST_KEY)) {
+        if (!selectedSnDate) {
+          setSelectedSnDate(AUTO_LATEST_KEY);
+        }
+      } else if (!selectedSnDate || !availableSnDates.includes(selectedSnDate) || (selectedRoute !== '全轄區' && selectedSnDate === AUTO_LATEST_KEY)) {
+        const validDates = availableSnDates.filter(d => d !== AUTO_LATEST_KEY);
+        setSelectedSnDate(validDates[0] || availableSnDates[0]);
+      }
+    } else {
+      setSelectedSnDate('');
+    }
+  }, [availableSnDates, selectedRoute, selectedSnDate]);
+
   React.useEffect(() => {
     if (!availableDirections.includes(selectedDirection)) setSelectedDirection('雙向');
   }, [availableDirections]);
@@ -199,49 +285,56 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     if (!availableLanes.includes(selectedLane)) setSelectedLane('全車道');
   }, [availableLanes]);
 
-  // ── 依 方向 + 車道 分別計算施工區段群（各方向各車道施工里程獨立限制，支援跳區域）
-  const dirLaneSegmentsMap = useMemo<Record<string, Record<string, ConstructionSegment[]>>>(() => {
+  // ── 依 路線 + 方向 + 車道 分別計算施工區段群（各國道、各方向、各車道施工里程獨立限制，互不污染）
+  const routeDirLaneSegmentsMap = useMemo<Record<string, Record<string, Record<string, ConstructionSegment[]>>>>(() => {
     if (!selectedRoute || constData.length === 0) return {};
     const isAllDistrict = selectedRoute === '全轄區';
     const GAP_THRESHOLD = 0.3; // 300 公尺以上差距視為跳區
 
-    // 依 方向 -> 車道 歸類實際施工里程
-    const grouped: Record<string, Record<string, number[]>> = {};
+    // 依 路線 -> 方向 -> 車道 歸類實際施工里程
+    const grouped: Record<string, Record<string, Record<string, number[]>>> = {};
     const filtered = constData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection)
+      (isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+      (selectedDirection === '雙向' || normalizeDirection(d.direction) === normalizeDirection(selectedDirection))
     );
 
     filtered.forEach(d => {
-      if (!grouped[d.direction]) grouped[d.direction] = {};
-      if (!grouped[d.direction][d.lane]) grouped[d.direction][d.lane] = [];
-      grouped[d.direction][d.lane].push(Number(d.mileage.toFixed(3)));
+      const r = normalizeRouteName(d.route);
+      const dir = normalizeDirection(d.direction);
+      const lane = d.lane;
+      if (!grouped[r]) grouped[r] = {};
+      if (!grouped[r][dir]) grouped[r][dir] = {};
+      if (!grouped[r][dir][lane]) grouped[r][dir][lane] = [];
+      grouped[r][dir][lane].push(Number(d.mileage.toFixed(3)));
     });
 
-    const result: Record<string, Record<string, ConstructionSegment[]>> = {};
+    const result: Record<string, Record<string, Record<string, ConstructionSegment[]>>> = {};
 
-    Object.entries(grouped).forEach(([dir, laneMap]) => {
-      result[dir] = {};
-      Object.entries(laneMap).forEach(([lane, mileages]) => {
-        const ms = Array.from(new Set(mileages)).sort((a, b) => a - b);
-        if (ms.length === 0) return;
+    Object.entries(grouped).forEach(([r, dirMap]) => {
+      result[r] = {};
+      Object.entries(dirMap).forEach(([dir, laneMap]) => {
+        result[r][dir] = {};
+        Object.entries(laneMap).forEach(([lane, mileages]) => {
+          const ms = Array.from(new Set(mileages)).sort((a, b) => a - b);
+          if (ms.length === 0) return;
 
-        const segs: ConstructionSegment[] = [];
-        let curStart = ms[0];
-        let curEnd = ms[0];
+          const segs: ConstructionSegment[] = [];
+          let curStart = ms[0];
+          let curEnd = ms[0];
 
-        for (let i = 1; i < ms.length; i++) {
-          const m = ms[i];
-          if (m - curEnd <= GAP_THRESHOLD) {
-            curEnd = m;
-          } else {
-            segs.push({ start: curStart, end: curEnd });
-            curStart = m;
-            curEnd = m;
+          for (let i = 1; i < ms.length; i++) {
+            const m = ms[i];
+            if (m - curEnd <= GAP_THRESHOLD) {
+              curEnd = m;
+            } else {
+              segs.push({ start: curStart, end: curEnd });
+              curStart = m;
+              curEnd = m;
+            }
           }
-        }
-        segs.push({ start: curStart, end: curEnd });
-        result[dir][lane] = segs;
+          segs.push({ start: curStart, end: curEnd });
+          result[r][dir][lane] = segs;
+        });
       });
     });
 
@@ -269,40 +362,63 @@ export const ConstructionReviewPage: React.FC<Props> = ({
 
   // ── 當前篩選條件對應的施工區段群（方向 + 車道）
   const constSegments = useMemo<ConstructionSegment[]>(() => {
-    if (Object.keys(dirLaneSegmentsMap).length === 0) return [];
-
-    const dirs = selectedDirection !== '雙向'
-      ? (dirLaneSegmentsMap[selectedDirection] ? [selectedDirection] : [])
-      : Object.keys(dirLaneSegmentsMap);
-
-    if (dirs.length === 0) return [];
+    if (Object.keys(routeDirLaneSegmentsMap).length === 0) return [];
 
     const segmentsToMerge: ConstructionSegment[] = [];
 
-    dirs.forEach(dir => {
-      const laneMap = dirLaneSegmentsMap[dir] || {};
-      if (selectedLane !== '全車道' && selectedLane !== MERGED_LANE_KEY) {
-        if (laneMap[selectedLane]) segmentsToMerge.push(...laneMap[selectedLane]);
-      } else if (selectedLane === MERGED_LANE_KEY) {
-        if (laneMap['第二車道']) segmentsToMerge.push(...laneMap['第二車道']);
-        if (laneMap['第三車道']) segmentsToMerge.push(...laneMap['第三車道']);
-      } else {
-        Object.values(laneMap).forEach(segs => segmentsToMerge.push(...segs));
-      }
+    Object.entries(routeDirLaneSegmentsMap).forEach(([r, dirMap]) => {
+      if (selectedRoute !== '全轄區' && r !== normalizeRouteName(selectedRoute)) return;
+
+      const dirs = selectedDirection !== '雙向'
+        ? (dirMap[normalizeDirection(selectedDirection)] ? [normalizeDirection(selectedDirection)] : [])
+        : Object.keys(dirMap);
+
+      dirs.forEach(dir => {
+        const laneMap = dirMap[dir] || {};
+        if (selectedLane !== '全車道' && selectedLane !== MERGED_LANE_KEY) {
+          if (laneMap[selectedLane]) segmentsToMerge.push(...laneMap[selectedLane]);
+        } else if (selectedLane === MERGED_LANE_KEY) {
+          if (laneMap['第二車道']) segmentsToMerge.push(...laneMap['第二車道']);
+          if (laneMap['第三車道']) segmentsToMerge.push(...laneMap['第三車道']);
+        } else {
+          Object.values(laneMap).forEach(segs => segmentsToMerge.push(...segs));
+        }
+      });
     });
 
     return mergeIntervals(segmentsToMerge);
-  }, [dirLaneSegmentsMap, selectedDirection, selectedLane, MERGED_LANE_KEY]);
+  }, [routeDirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, MERGED_LANE_KEY]);
 
-  // 判斷某里程、方向與車道是否落在施工區段內（前後加 0.05km 容許誤差）
-  // 嚴格依據該方向該車道自身施工區段判定；若未施工直接返回 false
-  const isInConstArea = (mileage: number, direction?: string, lane?: string, tolerance = 0.05): boolean => {
-    if (direction && lane) {
-      const dirMap = dirLaneSegmentsMap[direction];
-      if (!dirMap) return false;
-      const segs = dirMap[lane];
-      if (!segs || segs.length === 0) return false;
-      return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+  // 判斷某里程、路線、方向與車道是否落在施工區段內（前後加 0.05km 容許誤差）
+  // 嚴格依據該國道該方向該車道自身施工區段判定；若未施工直接返回 false
+  const isInConstArea = (mileage: number, route?: string, direction?: string, lane?: string, tolerance = 0.05): boolean => {
+    const rKey = route ? normalizeRouteName(route) : (selectedRoute !== '全轄區' ? normalizeRouteName(selectedRoute) : undefined);
+    const dKey = direction ? normalizeDirection(direction) : (selectedDirection !== '雙向' ? normalizeDirection(selectedDirection) : undefined);
+
+    if (rKey && dKey && lane) {
+      const segs = routeDirLaneSegmentsMap[rKey]?.[dKey]?.[lane];
+      if (segs && segs.length > 0) {
+        return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+      }
+      return false;
+    }
+
+    if (rKey && dKey) {
+      const laneMap = routeDirLaneSegmentsMap[rKey]?.[dKey];
+      if (laneMap) {
+        const segs = Object.values(laneMap).flat();
+        return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+      }
+      return false;
+    }
+
+    if (rKey) {
+      const dirMap = routeDirLaneSegmentsMap[rKey];
+      if (dirMap) {
+        const segs = Object.values(dirMap).flatMap(lm => Object.values(lm)).flat();
+        return segs.some(seg => mileage >= seg.start - tolerance && mileage <= seg.end + tolerance);
+      }
+      return false;
     }
 
     if (constSegments.length === 0) return false;
@@ -319,16 +435,16 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     const pairedDb: PavementData[] = [];
     const usedDbIndices = new Set<number>();
 
-    // 依 direction__lane 分組資料庫測點以提高匹配效能
+    // 依 route__direction__lane 分組資料庫測點以提高匹配效能並防止跨路線誤配
     const dbGrouped: Record<string, { item: PavementData; index: number }[]> = {};
     dbCandidates.forEach((d, idx) => {
-      const key = `${d.direction}__${d.lane}`;
+      const key = `${normalizeRouteName(d.route)}__${normalizeDirection(d.direction)}__${d.lane}`;
       if (!dbGrouped[key]) dbGrouped[key] = [];
       dbGrouped[key].push({ item: d, index: idx });
     });
 
     for (const cp of constPoints) {
-      const key = `${cp.direction}__${cp.lane}`;
+      const key = `${normalizeRouteName(cp.route)}__${normalizeDirection(cp.direction)}__${cp.lane}`;
       const list = dbGrouped[key];
       if (!list || list.length === 0) continue;
 
@@ -367,8 +483,21 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     };
   }, [constSegments]);
 
-  // 格式化施工區間文字（例如：178.000k ~ 179.000k）
+  // 格式化施工區間文字（例如：國道1號: 170.000k~179.000k；國道3號: 170.000k~180.000k）
   const formatSegmentsText = (segments: ConstructionSegment[]): string => {
+    if (Object.keys(routeDirLaneSegmentsMap).length === 0) return '無里程資料';
+    if (selectedRoute === '全轄區') {
+      const parts: string[] = [];
+      Object.entries(routeDirLaneSegmentsMap).forEach(([r, dirMap]) => {
+        const segs: ConstructionSegment[] = [];
+        Object.values(dirMap).forEach(lm => Object.values(lm).forEach(s => segs.push(...s)));
+        const merged = mergeIntervals(segs);
+        if (merged.length > 0) {
+          parts.push(`${r}: ${merged.map(s => `${s.start.toFixed(3)}k ~ ${s.end.toFixed(3)}k`).join(', ')}`);
+        }
+      });
+      return parts.join('；') || '無里程資料';
+    }
     if (segments.length === 0) return '無里程資料';
     if (segments.length === 1) {
       return `${segments[0].start.toFixed(3)}k ~ ${segments[0].end.toFixed(3)}k`;
@@ -376,84 +505,109 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     return segments.map(s => `${s.start.toFixed(3)}k ~ ${s.end.toFixed(3)}k`).join('、') + ` (共 ${segments.length} 處施工區段)`;
   };
 
-  // ── 資料庫比對可用日期（嚴格限制落在各方向各車道自身施工區段內，跳區或未施工方向/車道不比對）
+  // ── 資料庫比對可用日期（嚴格限制落在各方向各車道自身施工區段內，支援全轄區各路線自動最大化配對）
   const availableDbIriDates = useMemo(() => {
-    if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
+    if (!compareMode || !selectedRoute || Object.keys(routeDirLaneSegmentsMap).length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
     const laneFilter = (l: string) => {
       if (selectedLane === '全車道') return true;
       if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
       return l === selectedLane;
     };
-    return Array.from(new Set(
+    const dates = Array.from(new Set(
       dbData
         .filter(d =>
-          (isAllDistrict || d.route === selectedRoute) &&
-          (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+          (isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+          (selectedDirection === '雙向' || normalizeDirection(d.direction) === normalizeDirection(selectedDirection)) &&
           laneFilter(d.lane) &&
           d.iri > 0 &&
-          isInConstArea(d.mileage, d.direction, d.lane)
+          isInConstArea(d.mileage, d.route, d.direction, d.lane)
         )
         .map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, dirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
+    )).filter(Boolean).sort((a, b) => b.localeCompare(a));
+
+    if (isAllDistrict && dates.length > 0) {
+      return [AUTO_LATEST_KEY, ...dates];
+    }
+    return dates;
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, routeDirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
 
   const availableDbSnDates = useMemo(() => {
-    if (!compareMode || !selectedRoute || constSegments.length === 0) return [];
+    if (!compareMode || !selectedRoute || Object.keys(routeDirLaneSegmentsMap).length === 0) return [];
     const isAllDistrict = selectedRoute === '全轄區';
     const laneFilter = (l: string) => {
       if (selectedLane === '全車道') return true;
       if (selectedLane === MERGED_LANE_KEY) return l === '第二車道' || l === '第三車道';
       return l === selectedLane;
     };
-    return Array.from(new Set(
+    const dates = Array.from(new Set(
       dbData
         .filter(d =>
-          (isAllDistrict || d.route === selectedRoute) &&
-          (selectedDirection === '雙向' || d.direction === selectedDirection) &&
+          (isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+          (selectedDirection === '雙向' || normalizeDirection(d.direction) === normalizeDirection(selectedDirection)) &&
           laneFilter(d.lane) &&
           d.sn > 0 &&
-          isInConstArea(d.mileage, d.direction, d.lane)
+          isInConstArea(d.mileage, d.route, d.direction, d.lane)
         )
         .map(d => d.date)
-    )).sort((a, b) => b.localeCompare(a));
-  }, [compareMode, selectedRoute, selectedDirection, selectedLane, constSegments, dirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
+    )).filter(Boolean).sort((a, b) => b.localeCompare(a));
 
-  // 自動設定預設的比對日期（優先選施工日期前最近一期）
+    if (isAllDistrict && dates.length > 0) {
+      return [AUTO_LATEST_KEY, ...dates];
+    }
+    return dates;
+  }, [compareMode, selectedRoute, selectedDirection, selectedLane, routeDirLaneSegmentsMap, dbData, MERGED_LANE_KEY]);
+
+  // 自動設定預設的比對日期（全轄區預設使用 AUTO_LATEST_KEY 測站最大化；個別國道優先選施工日期前最近一期）
   React.useEffect(() => {
     if (availableDbIriDates.length > 0) {
-      if (!selectedDbIriDate || !availableDbIriDates.includes(selectedDbIriDate)) {
-        const earlier = availableDbIriDates.filter(d => !selectedIriDate || d < selectedIriDate);
-        setSelectedDbIriDate(earlier.length > 0 ? earlier[0] : availableDbIriDates[0]);
+      if (selectedRoute === '全轄區' && availableDbIriDates.includes(AUTO_LATEST_KEY)) {
+        if (!selectedDbIriDate) {
+          setSelectedDbIriDate(AUTO_LATEST_KEY);
+        }
+      } else if (!selectedDbIriDate || !availableDbIriDates.includes(selectedDbIriDate) || (selectedRoute !== '全轄區' && selectedDbIriDate === AUTO_LATEST_KEY)) {
+        const validDates = availableDbIriDates.filter(d => d !== AUTO_LATEST_KEY);
+        const refDate = selectedIriDate === AUTO_LATEST_KEY ? undefined : selectedIriDate;
+        const earlier = validDates.filter(d => !refDate || d < refDate);
+        setSelectedDbIriDate(earlier.length > 0 ? earlier[0] : (validDates[0] || availableDbIriDates[0]));
       }
     } else {
       setSelectedDbIriDate('');
     }
-  }, [availableDbIriDates, selectedIriDate]);
+  }, [availableDbIriDates, selectedIriDate, selectedRoute, selectedDbIriDate]);
 
   React.useEffect(() => {
     if (availableDbSnDates.length > 0) {
-      if (!selectedDbSnDate || !availableDbSnDates.includes(selectedDbSnDate)) {
-        const earlier = availableDbSnDates.filter(d => !selectedSnDate || d < selectedSnDate);
-        setSelectedDbSnDate(earlier.length > 0 ? earlier[0] : availableDbSnDates[0]);
+      if (selectedRoute === '全轄區' && availableDbSnDates.includes(AUTO_LATEST_KEY)) {
+        if (!selectedDbSnDate) {
+          setSelectedDbSnDate(AUTO_LATEST_KEY);
+        }
+      } else if (!selectedDbSnDate || !availableDbSnDates.includes(selectedDbSnDate) || (selectedRoute !== '全轄區' && selectedDbSnDate === AUTO_LATEST_KEY)) {
+        const validDates = availableDbSnDates.filter(d => d !== AUTO_LATEST_KEY);
+        const refDate = selectedSnDate === AUTO_LATEST_KEY ? undefined : selectedSnDate;
+        const earlier = validDates.filter(d => !refDate || d < refDate);
+        setSelectedDbSnDate(earlier.length > 0 ? earlier[0] : (validDates[0] || availableDbSnDates[0]));
       }
     } else {
       setSelectedDbSnDate('');
     }
-  }, [availableDbSnDates, selectedSnDate]);
+  }, [availableDbSnDates, selectedSnDate, selectedRoute, selectedDbSnDate]);
 
   // ── 免測判定與過濾
   const isExempt = (d: PavementData, zones: ExemptZone[]): boolean => {
+    const dRoute = normalizeRouteName(d.route);
+    const dDir = normalizeDirection(d.direction);
     return zones.some(z => {
-      if (z.route !== d.route) return false;
-      if (z.direction && z.direction !== d.direction) return false;
+      if (normalizeRouteName(z.route) !== dRoute) return false;
+      const zDir = normalizeDirection(z.direction);
+      if (zDir && zDir !== dDir) return false;
       if (z.type === 'point') {
         const target = z.mileage ?? -Infinity;
-        return Math.abs(d.mileage - target) <= 0.01;
+        return Math.abs(d.mileage - target) <= 0.05;
       }
       const s = Math.min(z.start ?? Infinity, z.end ?? -Infinity);
       const e = Math.max(z.start ?? Infinity, z.end ?? -Infinity);
-      return d.mileage >= s && d.mileage <= e;
+      return d.mileage >= (s - 0.005) && d.mileage <= (e + 0.005);
     });
   };
 
@@ -466,7 +620,6 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     });
   };
 
-  // ── 統計數據（施工後 vs 施工前比對）
   // ── 統計數據（施工後 vs 施工前比對，保證有效點數相符）
   const stats = useMemo(() => {
     if (constData.length === 0 || !selectedRoute) return null;
@@ -478,62 +631,212 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return lane === selectedLane;
     };
     const baseFilter = (d: PavementData) =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection);
+      (isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+      (selectedDirection === '雙向' || normalizeDirection(d.direction) === normalizeDirection(selectedDirection));
 
     const activeZones = isAllDistrict
       ? exemptZones
-      : exemptZones.filter(z => z.route === selectedRoute);
+      : exemptZones.filter(z => normalizeRouteName(z.route) === normalizeRouteName(selectedRoute));
 
-    // ── 施工後原始與免測過濾資料
+    // 各路線施工後最新日期對應表（全轄區 AUTO_LATEST_KEY 時依國道各自採用最新一期）
+    const constLatestIriDates: Record<string, string> = {};
+    if (selectedIriDate === AUTO_LATEST_KEY) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.iri > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestIriDates[r] = datesForRoute[0];
+      });
+    }
+
+    const constLatestSnDates: Record<string, string> = {};
+    if (selectedSnDate === AUTO_LATEST_KEY) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.sn > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestSnDates[r] = datesForRoute[0];
+      });
+    }
+
+    // ── 施工後原始 IRI 資料
     const rawConstIri = selectedIriDate
-      ? constData.filter(d => baseFilter(d) && d.iri > 0 && d.date === selectedIriDate && laneFilter(d.lane))
+      ? constData.filter(d => {
+          if (!baseFilter(d) || d.iri <= 0 || !laneFilter(d.lane)) return false;
+          if (selectedIriDate === AUTO_LATEST_KEY) {
+            const targetDate = constLatestIriDates[normalizeRouteName(d.route)];
+            return targetDate ? d.date === targetDate : true;
+          }
+          return d.date === selectedIriDate;
+        })
       : [];
-    const validConstIri = applyExempt(rawConstIri, activeZones);
-    const constExemptedCount = rawConstIri.length - validConstIri.length;
 
     const constSnData = selectedSnDate
-      ? constData.filter(d => baseFilter(d) && d.sn > 0 && d.date === selectedSnDate && laneFilter(d.lane))
+      ? constData.filter(d => {
+          if (!baseFilter(d) || d.sn <= 0 || !laneFilter(d.lane)) return false;
+          if (selectedSnDate === AUTO_LATEST_KEY) {
+            const targetDate = constLatestSnDates[normalizeRouteName(d.route)];
+            return targetDate ? d.date === targetDate : true;
+          }
+          return d.date === selectedSnDate;
+        })
       : [];
 
-    let evalConstIri = validConstIri;
+    let evalConstIri: PavementData[] = [];
     let evalDbIri: PavementData[] = [];
     let evalConstSn = constSnData;
     let evalDbSn: PavementData[] = [];
     let dbTotalRaw = 0;
+    let constExemptedCount = 0;
     let dbExemptedCount = 0;
+    let pairedTotal = 0;
 
     // ── 施工前（資料庫）對比資料配對
-    if (compareMode && constSegments.length > 0) {
-      if (selectedDbIriDate) {
-        const rawDbIri = dbData.filter(d =>
-          baseFilter(d) &&
-          d.iri > 0 &&
-          d.date === selectedDbIriDate &&
-          laneFilter(d.lane) &&
-          isInConstArea(d.mileage, d.direction, d.lane)
-        );
-        dbTotalRaw = rawDbIri.length;
-        const validDbIri = applyExempt(rawDbIri, activeZones);
-        dbExemptedCount = rawDbIri.length - validDbIri.length;
+    if (compareMode && constSegments.length > 0 && selectedDbIriDate) {
+      const isAutoMax = selectedDbIriDate === AUTO_LATEST_KEY;
 
-        // 進行 1 對 1 測點配對，使有效點數完全相符
-        const paired = matchPairs(validConstIri, validDbIri, 0.05);
+      // 取得各路線施工前最新期別對應表（針對 isAutoMax 時自動跨國道配對，實現測站最大化）
+      const routeLatestDates: Record<string, string> = {};
+      const activeRoutes = Array.from(new Set(rawConstIri.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const refConstDate = selectedIriDate === AUTO_LATEST_KEY ? constLatestIriDates[r] : selectedIriDate;
+        const datesForRoute = dbData
+          .filter(d => normalizeRouteName(d.route) === r && d.iri > 0 && (!refConstDate || d.date < refConstDate))
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) {
+          routeLatestDates[r] = datesForRoute[0];
+        } else {
+          const anyDates = dbData.filter(d => normalizeRouteName(d.route) === r && d.iri > 0).map(d => d.date).sort((a, b) => b.localeCompare(a));
+          if (anyDates.length > 0) routeLatestDates[r] = anyDates[0];
+        }
+      });
+
+      const rawDbIri = dbData.filter(d => {
+        if (!baseFilter(d) || d.iri <= 0 || !laneFilter(d.lane)) return false;
+        if (!isInConstArea(d.mileage, d.route, d.direction, d.lane)) return false;
+        const rNorm = normalizeRouteName(d.route);
+        if (isAutoMax) {
+          const targetDate = routeLatestDates[rNorm];
+          if (targetDate && d.date !== targetDate) return false;
+        } else {
+          if (d.date !== selectedDbIriDate) return false;
+        }
+        return true;
+      });
+      dbTotalRaw = rawDbIri.length;
+
+      // 1. 先依實體地理位置進行施工前與施工後的 1 對 1 測點配對
+      const paired = matchPairs(rawConstIri, rawDbIri, 0.05);
+      pairedTotal = paired.pairedConst.length;
+
+      // 2. 在成對測點基礎上依免測模式過濾
+      if (currentIriExemptMode === 'all' || activeZones.length === 0) {
         evalConstIri = paired.pairedConst;
         evalDbIri = paired.pairedDb;
+        constExemptedCount = 0;
+        dbExemptedCount = 0;
+      } else if (currentIriExemptMode === 'exclude') {
+        const filteredConst: PavementData[] = [];
+        const filteredDb: PavementData[] = [];
+        let exempted = 0;
+
+        for (let i = 0; i < paired.pairedConst.length; i++) {
+          const cp = paired.pairedConst[i];
+          const dp = paired.pairedDb[i];
+          if (isExempt(cp, activeZones) || isExempt(dp, activeZones)) {
+            exempted++;
+          } else {
+            filteredConst.push(cp);
+            filteredDb.push(dp);
+          }
+        }
+        evalConstIri = filteredConst;
+        evalDbIri = filteredDb;
+        constExemptedCount = exempted;
+        dbExemptedCount = exempted;
+      } else {
+        // 'low-accept'：免測但 ≤1.75 仍採納
+        const filteredConst: PavementData[] = [];
+        const filteredDb: PavementData[] = [];
+        let exempted = 0;
+
+        for (let i = 0; i < paired.pairedConst.length; i++) {
+          const cp = paired.pairedConst[i];
+          const dp = paired.pairedDb[i];
+          const cpExempt = isExempt(cp, activeZones) || isExempt(dp, activeZones);
+
+          if (!cpExempt) {
+            filteredConst.push(cp);
+            filteredDb.push(dp);
+          } else {
+            // 位於免測區：若施工後品質良好 (IRI ≤ 1.75) 則成對保留採納；若 > 1.75 則免測扣除
+            if (cp.iri <= 1.75) {
+              filteredConst.push(cp);
+              filteredDb.push(dp);
+            } else {
+              exempted++;
+            }
+          }
+        }
+        evalConstIri = filteredConst;
+        evalDbIri = filteredDb;
+        constExemptedCount = exempted;
+        dbExemptedCount = exempted;
       }
 
       if (selectedDbSnDate) {
-        const rawDbSn = dbData.filter(d =>
-          baseFilter(d) &&
-          d.sn > 0 &&
-          d.date === selectedDbSnDate &&
-          laneFilter(d.lane) &&
-          isInConstArea(d.mileage, d.direction, d.lane)
-        );
+        const isAutoMaxSn = selectedDbSnDate === AUTO_LATEST_KEY;
+        const routeLatestSnDates: Record<string, string> = {};
+        const activeRoutesSn = Array.from(new Set(constSnData.map(d => normalizeRouteName(d.route))));
+        activeRoutesSn.forEach(r => {
+          const refConstDate = selectedSnDate === AUTO_LATEST_KEY ? constLatestSnDates[r] : selectedSnDate;
+          const datesForRoute = dbData
+            .filter(d => normalizeRouteName(d.route) === r && d.sn > 0 && (!refConstDate || d.date < refConstDate))
+            .map(d => d.date)
+            .sort((a, b) => b.localeCompare(a));
+          if (datesForRoute.length > 0) {
+            routeLatestSnDates[r] = datesForRoute[0];
+          } else {
+            const anyDates = dbData.filter(d => normalizeRouteName(d.route) === r && d.sn > 0).map(d => d.date).sort((a, b) => b.localeCompare(a));
+            if (anyDates.length > 0) routeLatestSnDates[r] = anyDates[0];
+          }
+        });
+
+        const rawDbSn = dbData.filter(d => {
+          if (!baseFilter(d) || d.sn <= 0 || !laneFilter(d.lane)) return false;
+          if (!isInConstArea(d.mileage, d.route, d.direction, d.lane)) return false;
+          const rNorm = normalizeRouteName(d.route);
+          if (isAutoMaxSn) {
+            const targetDate = routeLatestSnDates[rNorm];
+            if (targetDate && d.date !== targetDate) return false;
+          } else {
+            if (d.date !== selectedDbSnDate) return false;
+          }
+          return true;
+        });
+
         const pairedSn = matchPairs(constSnData, rawDbSn, 0.05);
         evalConstSn = pairedSn.pairedConst;
         evalDbSn = pairedSn.pairedDb;
+      }
+    } else {
+      // 單獨模式（未開啟比對 或 尚未選定資料庫比對日期）
+      pairedTotal = rawConstIri.length;
+      if (currentIriExemptMode === 'all' || activeZones.length === 0) {
+        evalConstIri = rawConstIri;
+        constExemptedCount = 0;
+      } else if (currentIriExemptMode === 'exclude') {
+        evalConstIri = rawConstIri.filter(d => !isExempt(d, activeZones));
+        constExemptedCount = rawConstIri.length - evalConstIri.length;
+      } else {
+        // low-accept
+        evalConstIri = rawConstIri.filter(d => !isExempt(d, activeZones) || d.iri <= 1.75);
+        constExemptedCount = rawConstIri.length - evalConstIri.length;
       }
     }
 
@@ -570,6 +873,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       constSnCount: evalConstSn.length,
       constTotalRaw: rawConstIri.length,
       constExemptedCount,
+      pairedTotal,
       constIriBands: [
         { label: '1.75 ≤ IRI < 2.0', count: constIriB1, pct: pct(constIriB1, constN), color: 'text-yellow-600' },
         { label: '2.0 ≤ IRI < 2.5',  count: constIriB2, pct: pct(constIriB2, constN), color: 'text-orange-600' },
@@ -580,8 +884,8 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       // 資料庫對比（點數與施工後成對相符）
       dbAvgIri: dbAvgIri > 0 ? dbAvgIri.toFixed(2) : null,
       dbAvgSn: dbAvgSn > 0 ? dbAvgSn.toFixed(1) : null,
-      dbIriDate: selectedDbIriDate,
-      dbSnDate: selectedDbSnDate,
+      dbIriDate: selectedDbIriDate === AUTO_LATEST_KEY ? '各路線最新期別' : selectedDbIriDate,
+      dbSnDate: selectedDbSnDate === AUTO_LATEST_KEY ? '各路線最新期別' : selectedDbSnDate,
       dbIriCount,
       dbSnCount,
       dbTotalRaw,
@@ -603,7 +907,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
     };
   }, [
     constData, selectedRoute, selectedDirection, selectedLane, selectedIriDate, selectedSnDate,
-    compareMode, dbData, constSegments, dirLaneSegmentsMap, selectedDbIriDate, selectedDbSnDate,
+    compareMode, dbData, constSegments, routeDirLaneSegmentsMap, selectedDbIriDate, selectedDbSnDate,
     exemptZones, currentIriExemptMode, MERGED_LANE_KEY
   ]);
 
@@ -617,30 +921,75 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    const constFiltered = constData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      d.iri > 0 &&
-      d.date === selectedIriDate
-    );
+    const isAutoMaxConst = selectedIriDate === AUTO_LATEST_KEY;
+    const constLatestIriDates: Record<string, string> = {};
+    if (isAutoMaxConst) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.iri > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestIriDates[r] = datesForRoute[0];
+      });
+    }
 
-    const dbFiltered = dbData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      d.iri > 0 &&
-      d.date === selectedDbIriDate &&
-      isInConstArea(d.mileage, d.direction, d.lane)
-    );
+    const constFiltered = constData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane) || d.iri <= 0) return false;
+      if (isAutoMaxConst) {
+        const targetDate = constLatestIriDates[normalizeRouteName(d.route)];
+        return targetDate ? d.date === targetDate : true;
+      }
+      return d.date === selectedIriDate;
+    });
+
+    const isAutoMaxDb = selectedDbIriDate === AUTO_LATEST_KEY;
+    const routeLatestDates: Record<string, string> = {};
+    const activeRoutes = Array.from(new Set(constFiltered.map(d => normalizeRouteName(d.route))));
+    activeRoutes.forEach(r => {
+      const refConstDate = isAutoMaxConst ? constLatestIriDates[r] : selectedIriDate;
+      const datesForRoute = dbData
+        .filter(d => normalizeRouteName(d.route) === r && d.iri > 0 && (!refConstDate || d.date < refConstDate))
+        .map(d => d.date)
+        .sort((a, b) => b.localeCompare(a));
+      if (datesForRoute.length > 0) {
+        routeLatestDates[r] = datesForRoute[0];
+      } else {
+        const anyDates = dbData.filter(d => normalizeRouteName(d.route) === r && d.iri > 0).map(d => d.date).sort((a, b) => b.localeCompare(a));
+        if (anyDates.length > 0) routeLatestDates[r] = anyDates[0];
+      }
+    });
+
+    const dbFiltered = dbData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane) || d.iri <= 0) return false;
+      if (!isInConstArea(d.mileage, d.route, d.direction, d.lane)) return false;
+      const rNorm = normalizeRouteName(d.route);
+      if (isAutoMaxDb) {
+        const targetDate = routeLatestDates[rNorm];
+        if (targetDate && d.date !== targetDate) return false;
+      } else {
+        if (d.date !== selectedDbIriDate) return false;
+      }
+      return true;
+    });
 
     const { pairedConst, pairedDb } = matchPairs(constFiltered, dbFiltered, 0.05);
 
-    const constPts = pairedConst.map(d => ({ ...d, date: `${selectedIriDate} (施工後)` }));
-    const dbPts = pairedDb.map(d => ({ ...d, date: `${selectedDbIriDate} (施工前)` }));
+    const constPts = pairedConst.map(d => ({
+      ...d,
+      date: isAutoMaxConst ? `${d.date} (施工後)` : `${selectedIriDate} (施工後)`,
+    }));
+    const dbPts = pairedDb.map(d => ({
+      ...d,
+      date: isAutoMaxDb ? `${d.date} (施工前)` : `${selectedDbIriDate} (施工前)`,
+    }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbIriDate, constSegments, dirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbIriDate, constSegments, routeDirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedIriDate, dbData, constData, MERGED_LANE_KEY]);
 
   const combinedSnData = useMemo(() => {
     if (!compareMode || !selectedDbSnDate || constSegments.length === 0) return [];
@@ -651,30 +1000,75 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    const constFiltered = constData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      d.sn > 0 &&
-      d.date === selectedSnDate
-    );
+    const isAutoMaxConstSn = selectedSnDate === AUTO_LATEST_KEY;
+    const constLatestSnDates: Record<string, string> = {};
+    if (isAutoMaxConstSn) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.sn > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestSnDates[r] = datesForRoute[0];
+      });
+    }
 
-    const dbFiltered = dbData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      d.sn > 0 &&
-      d.date === selectedDbSnDate &&
-      isInConstArea(d.mileage, d.direction, d.lane)
-    );
+    const constFiltered = constData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane) || d.sn <= 0) return false;
+      if (isAutoMaxConstSn) {
+        const targetDate = constLatestSnDates[normalizeRouteName(d.route)];
+        return targetDate ? d.date === targetDate : true;
+      }
+      return d.date === selectedSnDate;
+    });
+
+    const isAutoMaxDbSn = selectedDbSnDate === AUTO_LATEST_KEY;
+    const routeLatestSnDates: Record<string, string> = {};
+    const activeRoutesSn = Array.from(new Set(constFiltered.map(d => normalizeRouteName(d.route))));
+    activeRoutesSn.forEach(r => {
+      const refConstDate = isAutoMaxConstSn ? constLatestSnDates[r] : selectedSnDate;
+      const datesForRoute = dbData
+        .filter(d => normalizeRouteName(d.route) === r && d.sn > 0 && (!refConstDate || d.date < refConstDate))
+        .map(d => d.date)
+        .sort((a, b) => b.localeCompare(a));
+      if (datesForRoute.length > 0) {
+        routeLatestSnDates[r] = datesForRoute[0];
+      } else {
+        const anyDates = dbData.filter(d => normalizeRouteName(d.route) === r && d.sn > 0).map(d => d.date).sort((a, b) => b.localeCompare(a));
+        if (anyDates.length > 0) routeLatestSnDates[r] = anyDates[0];
+      }
+    });
+
+    const dbFiltered = dbData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane) || d.sn <= 0) return false;
+      if (!isInConstArea(d.mileage, d.route, d.direction, d.lane)) return false;
+      const rNorm = normalizeRouteName(d.route);
+      if (isAutoMaxDbSn) {
+        const targetDate = routeLatestSnDates[rNorm];
+        if (targetDate && d.date !== targetDate) return false;
+      } else {
+        if (d.date !== selectedDbSnDate) return false;
+      }
+      return true;
+    });
 
     const { pairedConst, pairedDb } = matchPairs(constFiltered, dbFiltered, 0.05);
 
-    const constPts = pairedConst.map(d => ({ ...d, date: `${selectedSnDate} (施工後)` }));
-    const dbPts = pairedDb.map(d => ({ ...d, date: `${selectedDbSnDate} (施工前)` }));
+    const constPts = pairedConst.map(d => ({
+      ...d,
+      date: isAutoMaxConstSn ? `${d.date} (施工後)` : `${selectedSnDate} (施工後)`,
+    }));
+    const dbPts = pairedDb.map(d => ({
+      ...d,
+      date: isAutoMaxDbSn ? `${d.date} (施工前)` : `${selectedDbSnDate} (施工前)`,
+    }));
 
     return [...dbPts, ...constPts];
-  }, [compareMode, selectedDbSnDate, constSegments, dirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
+  }, [compareMode, selectedDbSnDate, constSegments, routeDirLaneSegmentsMap, selectedRoute, selectedDirection, selectedLane, selectedSnDate, dbData, constData, MERGED_LANE_KEY]);
 
   // 單獨的施工前資料（與施工後點位成對配對）
   const singleDbData = useMemo(() => {
@@ -686,24 +1080,57 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       return l === selectedLane;
     };
 
-    const constFiltered = constData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      ((d.iri > 0 && d.date === selectedIriDate) || (d.sn > 0 && d.date === selectedSnDate))
-    );
+    const isAutoMaxConstIri = selectedIriDate === AUTO_LATEST_KEY;
+    const isAutoMaxConstSn = selectedSnDate === AUTO_LATEST_KEY;
+    const constLatestIriDates: Record<string, string> = {};
+    if (isAutoMaxConstIri) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.iri > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestIriDates[r] = datesForRoute[0];
+      });
+    }
+    const constLatestSnDates: Record<string, string> = {};
+    if (isAutoMaxConstSn) {
+      const activeRoutes = Array.from(new Set(constData.map(d => normalizeRouteName(d.route))));
+      activeRoutes.forEach(r => {
+        const datesForRoute = constData
+          .filter(d => normalizeRouteName(d.route) === r && d.sn > 0)
+          .map(d => d.date)
+          .sort((a, b) => b.localeCompare(a));
+        if (datesForRoute.length > 0) constLatestSnDates[r] = datesForRoute[0];
+      });
+    }
 
-    const dbCandidates = dbData.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || d.direction === selectedDirection) &&
-      laneFilter(d.lane) &&
-      isInConstArea(d.mileage, d.direction, d.lane) &&
-      (d.date === selectedDbIriDate || d.date === selectedDbSnDate)
-    );
+    const constFiltered = constData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane)) return false;
+      const r = normalizeRouteName(d.route);
+      const isIriMatch = d.iri > 0 && (isAutoMaxConstIri ? (constLatestIriDates[r] ? d.date === constLatestIriDates[r] : true) : d.date === selectedIriDate);
+      const isSnMatch = d.sn > 0 && (isAutoMaxConstSn ? (constLatestSnDates[r] ? d.date === constLatestSnDates[r] : true) : d.date === selectedSnDate);
+      return isIriMatch || isSnMatch;
+    });
+
+    const isAutoMaxIri = selectedDbIriDate === AUTO_LATEST_KEY;
+    const isAutoMaxSn = selectedDbSnDate === AUTO_LATEST_KEY;
+
+    const dbCandidates = dbData.filter(d => {
+      if (!isAllDistrict && normalizeRouteName(d.route) !== normalizeRouteName(selectedRoute)) return false;
+      if (selectedDirection !== '雙向' && normalizeDirection(d.direction) !== normalizeDirection(selectedDirection)) return false;
+      if (!laneFilter(d.lane)) return false;
+      if (!isInConstArea(d.mileage, d.route, d.direction, d.lane)) return false;
+      if (d.iri > 0 && (isAutoMaxIri || d.date === selectedDbIriDate)) return true;
+      if (d.sn > 0 && (isAutoMaxSn || d.date === selectedDbSnDate)) return true;
+      return false;
+    });
 
     const { pairedDb } = matchPairs(constFiltered, dbCandidates, 0.05);
     return pairedDb;
-  }, [compareMode, constSegments, selectedRoute, selectedDirection, selectedLane, dbData, selectedDbIriDate, selectedDbSnDate, dirLaneSegmentsMap, MERGED_LANE_KEY, constData, selectedIriDate, selectedSnDate]);
+  }, [compareMode, constSegments, selectedRoute, selectedDirection, selectedLane, dbData, selectedDbIriDate, selectedDbSnDate, routeDirLaneSegmentsMap, MERGED_LANE_KEY, constData, selectedIriDate, selectedSnDate]);
 
   // ── 上傳處理
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'iri' | 'sn') => {
@@ -722,8 +1149,8 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       if (parsed.length === 0) return;
       const mapped: PavementData[] = parsed.map(p => ({
         date: normalizeDateStr(p.date),
-        route: p.route || '未知路線',
-        direction: p.direction || '未知方向',
+        route: normalizeRouteName(p.route || '未知路線'),
+        direction: normalizeDirection(p.direction || '未知方向'),
         lane: normalizeLaneLocal(p.lane),
         mileage: parseMileageToNumber(p.mileage),
         iri: p.avgIri ? Number(p.avgIri) : 0,
@@ -843,7 +1270,18 @@ export const ConstructionReviewPage: React.FC<Props> = ({
               <Upload className="w-3.5 h-3.5" /> 追加 SN
             </button>
             <button
-              onClick={() => setCompareMode(m => !m)}
+              onClick={() => {
+                setCompareMode(m => {
+                  const next = !m;
+                  if (next && selectedRoute === '全轄區') {
+                    setSelectedIriDate(AUTO_LATEST_KEY);
+                    setSelectedSnDate(AUTO_LATEST_KEY);
+                    setSelectedDbIriDate(AUTO_LATEST_KEY);
+                    setSelectedDbSnDate(AUTO_LATEST_KEY);
+                  }
+                  return next;
+                });
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs ${
                 compareMode
                   ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-200'
@@ -923,7 +1361,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                 style={SELECT_STYLE}
               >
                 {availableIriDates.length > 0
-                  ? availableIriDates.map(d => <option key={d} value={d}>{d}</option>)
+                  ? availableIriDates.map(d => (
+                      <option key={d} value={d}>
+                        {d === AUTO_LATEST_KEY ? '★ 各路線施工後最新期別 (測站最大化)' : d}
+                      </option>
+                    ))
                   : <option value="">無資料</option>}
               </select>
             </div>
@@ -940,7 +1382,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                 style={SELECT_STYLE}
               >
                 {availableSnDates.length > 0
-                  ? availableSnDates.map(d => <option key={d} value={d}>{d}</option>)
+                  ? availableSnDates.map(d => (
+                      <option key={d} value={d}>
+                        {d === AUTO_LATEST_KEY ? '★ 各路線施工後最新期別 (測站最大化)' : d}
+                      </option>
+                    ))
                   : <option value="">無資料</option>}
               </select>
             </div>
@@ -972,7 +1418,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                     style={SELECT_STYLE}
                   >
                     {availableDbIriDates.length > 0
-                      ? availableDbIriDates.map(d => <option key={d} value={d}>{d} {d < selectedIriDate ? '(施工前)' : ''}</option>)
+                      ? availableDbIriDates.map(d => (
+                          <option key={d} value={d}>
+                            {d === AUTO_LATEST_KEY
+                              ? '★ 各路線施工前最新期別 (測站最大化)'
+                              : `${d} ${d < selectedIriDate ? '(施工前)' : ''}`}
+                          </option>
+                        ))
                       : <option value="">無比對資料</option>}
                   </select>
                 </div>
@@ -986,7 +1438,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                     style={SELECT_STYLE}
                   >
                     {availableDbSnDates.length > 0
-                      ? availableDbSnDates.map(d => <option key={d} value={d}>{d} {d < selectedSnDate ? '(施工前)' : ''}</option>)
+                      ? availableDbSnDates.map(d => (
+                          <option key={d} value={d}>
+                            {d === AUTO_LATEST_KEY
+                              ? '★ 各路線施工前最新期別 (測站最大化)'
+                              : `${d} ${d < selectedSnDate ? '(施工前)' : ''}`}
+                          </option>
+                        ))
                       : <option value="">無比對資料</option>}
                   </select>
                 </div>
@@ -1046,11 +1504,16 @@ export const ConstructionReviewPage: React.FC<Props> = ({
           <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
             目前依<strong>「{currentIriExemptMode === 'exclude' ? '扣除免測' : '免測但 ≤1.75 仍採納'}」</strong>模式：
-            施工後排除 <strong>{stats.constExemptedCount}</strong> 處免測點（原始 {stats.constTotalRaw} 處，成對有效 <strong>{stats.constIriCount}</strong> 處）
-            {compareMode && stats.dbIriCount > 0 && (
-              <>；資料庫比對資料排除 <strong>{stats.dbExemptedCount}</strong> 處免測點（原始 {stats.dbTotalRaw} 處，成對有效 <strong>{stats.dbIriCount}</strong> 處）</>
+            {compareMode && stats.pairedTotal > 0 ? (
+              <>
+                前後成對測點共 {stats.pairedTotal} 處，共排除 <strong>{stats.constExemptedCount}</strong> 處免測點，成對有效計入 <strong>{stats.constIriCount}</strong> 處（施工後原始 {stats.constTotalRaw} 點 / 施工前原始 {stats.dbTotalRaw} 點）。
+              </>
+            ) : (
+              <>
+                施工後共排除 <strong>{stats.constExemptedCount}</strong> 處免測點（原始 {stats.constTotalRaw} 點，有效計入 <strong>{stats.constIriCount}</strong> 點）。
+              </>
             )}
-            。前後比對有效點數嚴格相符，各級距與平均 IRI 皆依成對測點計算。
+            前後比對有效點數嚴格相符，各級距與平均 IRI 皆依採納之成對測點計算。
           </span>
         </div>
       )}
@@ -1181,7 +1644,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                       </th>
                     )}
                     <th className="py-2.5 px-3 font-semibold text-orange-700 bg-orange-50/50">
-                      施工後 ({selectedIriDate || '--'})
+                      施工後 ({selectedIriDate === AUTO_LATEST_KEY ? '各路線最新期別' : (selectedIriDate || '--')})
                     </th>
                     {compareMode && <th className="py-2.5 px-3 font-semibold">前後改善成效</th>}
                   </tr>
@@ -1435,11 +1898,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                       <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
                         <span className="flex items-center gap-1">
                           <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
-                          施工前 ({selectedDbIriDate || '無比對'})
+                          施工前 ({selectedDbIriDate === AUTO_LATEST_KEY ? '各路線最新期別' : (selectedDbIriDate || '無比對')})
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
-                          施工後 ({selectedIriDate || '--'})
+                          施工後 ({selectedIriDate === AUTO_LATEST_KEY ? '各路線最新期別' : (selectedIriDate || '--')})
                         </span>
                       </div>
                     </div>
@@ -1496,11 +1959,11 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                     <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
                       <span className="flex items-center gap-1">
                         <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
-                        施工前 ({selectedDbSnDate || '無比對'})
+                        施工前 ({selectedDbSnDate === AUTO_LATEST_KEY ? '各路線最新期別' : (selectedDbSnDate || '無比對')})
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
-                        施工後 ({selectedSnDate || '--'})
+                        施工後 ({selectedSnDate === AUTO_LATEST_KEY ? '各路線最新期別' : (selectedSnDate || '--')})
                       </span>
                     </div>
                   </div>

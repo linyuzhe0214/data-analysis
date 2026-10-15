@@ -35,14 +35,19 @@ const CHINESE_DIGITS: Record<string, string> = {
 
 const extractHighway = (text: string): string => {
   if (!text) return '';
-  // 優先：國道數字號
-  let m = text.match(/國道\s*(\d+)\s*號/);
+  // 優先：國道數字號 (國道1號 / 國道 1 號 / 國道1)
+  let m = text.match(/國道\s*(\d+)\s*號?/);
   if (m) return `國道${m[1]}號`;
-  // 國道中文數字號
-  m = text.match(/國道\s*([一二三四五六七八九十])\s*號/);
+  // 國道中文數字號 (國道一號 / 國道一)
+  m = text.match(/國道\s*([一二三四五六七八九十])\s*號?/);
+  if (m) return `國道${CHINESE_DIGITS[m[1]] ?? m[1]}號`;
+  // 簡稱：國1、國3、國4、國一、國三
+  m = text.match(/國\s*(\d+)/);
+  if (m) return `國道${m[1]}號`;
+  m = text.match(/國\s*([一二三四五六七八九十])/);
   if (m) return `國道${CHINESE_DIGITS[m[1]] ?? m[1]}號`;
   // 備用：只有數字（例如 F1、Freeway 1）
-  m = text.match(/[Ff]reeway\s*(\d+)/);
+  m = text.match(/[Ff]reeway\s*(\d+)/i);
   if (m) return `國道${m[1]}號`;
   return '';
 };

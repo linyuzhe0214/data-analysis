@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff, HardHat } from 'lucide-react';
-import { PavementData } from './types';
+import { PavementData, normalizeRouteName, normalizeDirection } from './types';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
 import { ImportWizard } from './components/ImportWizard';
@@ -496,16 +496,19 @@ export default function App() {
 
   // 判斷某一資料點是否落在免測路段內（依路線+方向）
   const isExempt = (d: PavementData, zones: ExemptZone[]): boolean => {
+    const dRoute = normalizeRouteName(d.route);
+    const dDir = normalizeDirection(d.direction);
     return zones.some(z => {
-      if (z.route !== d.route) return false;
-      if (z.direction && z.direction !== d.direction) return false;
+      if (normalizeRouteName(z.route) !== dRoute) return false;
+      const zDir = normalizeDirection(z.direction);
+      if (zDir && zDir !== dDir) return false;
       if (z.type === 'point') {
         const target = z.mileage ?? -Infinity;
-        return Math.abs(d.mileage - target) <= 0.01;
+        return Math.abs(d.mileage - target) <= 0.05;
       }
       const s = Math.min(z.start ?? Infinity, z.end ?? -Infinity);
       const e = Math.max(z.start ?? Infinity, z.end ?? -Infinity);
-      return d.mileage >= s && d.mileage <= e;
+      return d.mileage >= (s - 0.005) && d.mileage <= (e + 0.005);
     });
   };
 
@@ -514,14 +517,14 @@ export default function App() {
 
     const isAllDistrict = selectedRoute === ALL_DISTRICT_KEY;
     const routeData = data.filter(d =>
-      (isAllDistrict || d.route === selectedRoute) &&
-      (selectedDirection === '雙向' || !selectedDirection || d.direction === selectedDirection)
+      (isAllDistrict || normalizeRouteName(d.route) === normalizeRouteName(selectedRoute)) &&
+      (selectedDirection === '雙向' || !selectedDirection || normalizeDirection(d.direction) === normalizeDirection(selectedDirection))
     );
 
     // 取得適用的免測規則（全轄區則納入所有路線的規則，由 isExempt 各自比對 route）
     const activeZones = isAllDistrict
       ? exemptZones
-      : exemptZones.filter(z => z.route === selectedRoute);
+      : exemptZones.filter(z => normalizeRouteName(z.route) === normalizeRouteName(selectedRoute));
 
     // 依模式過濾 IRI 資料
     const applyExempt = (items: PavementData[]): PavementData[] => {
