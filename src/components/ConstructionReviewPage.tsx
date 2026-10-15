@@ -791,198 +791,253 @@ export const ConstructionReviewPage: React.FC<Props> = ({
       <input type="file" accept=".xlsx,.xls,.csv" multiple className="hidden" ref={iriFileRef} onChange={e => handleFileChange(e, 'iri')} />
       <input type="file" accept=".xlsx,.xls,.csv" multiple className="hidden" ref={snFileRef}  onChange={e => handleFileChange(e, 'sn')} />
 
-      {/* ── 工具列 */}
-      <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
-        <HardHat className="w-4 h-4 text-orange-600 shrink-0" />
-        <span className="text-xs font-bold text-orange-700">
-          施工品質暫存中 — 共 {constData.length} 筆資料（關閉瀏覽器才清除）
-        </span>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          {parsing && <span className="flex items-center gap-1 text-xs text-blue-600"><Loader2 className="w-3 h-3 animate-spin" />解析中...</span>}
-          <button onClick={() => iriFileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors">
-            <Upload className="w-3 h-3" /> 追加 IRI
-          </button>
-          <button onClick={() => snFileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold transition-colors">
-            <Upload className="w-3 h-3" /> 追加 SN
-          </button>
-          <button onClick={() => setCompareMode(m => !m)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
-              compareMode ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
-            }`}>
-            <GitCompare className="w-3 h-3" />
-            {compareMode ? '前後對比 ON' : '開啟前後對比'}
-          </button>
-          <button onClick={clearAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold transition-colors">
-            <Trash2 className="w-3 h-3" /> 清空
-          </button>
-        </div>
-      </div>
-
-      {/* 已上傳檔案 */}
-      {fileRecords.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          {fileRecords.map(r => (
-            <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${r.type === 'iri' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                {r.type.toUpperCase()}
-              </span>
-              <span className="flex-1 text-sm text-slate-600 truncate">{r.fileName}</span>
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" /> {r.count} 筆（暫存）
-              </span>
+      {/* ── 統一整合控制面板 (Unified Control Hub) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden transition-all">
+        {/* 1. 頂部狀態與操作列 (Header Bar) */}
+        <div className="px-5 py-3.5 bg-gradient-to-r from-orange-50/70 via-amber-50/30 to-slate-50 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+          {/* 左側：狀態標籤與檔案徽章 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/10 text-orange-700 border border-orange-200/80 rounded-lg text-xs font-bold shadow-xs">
+              <HardHat className="w-3.5 h-3.5 text-orange-600" />
+              <span>施工品質檢視</span>
+              <span className="text-[11px] font-semibold text-orange-600/80">({constData.length} 筆暫存)</span>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* ── 篩選器 */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* 路線 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
-              <Map className="w-3.5 h-3.5" /> 路線
-            </label>
-            <select value={selectedRoute} onChange={e => setSelectedRoute(e.target.value)}
-              className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2 px-3 text-sm font-medium text-slate-700 outline-none appearance-none cursor-pointer"
-              style={SELECT_STYLE}>
-              {routes.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          {/* 方向 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
-              <Compass className="w-3.5 h-3.5" /> 方向
-            </label>
-            <select value={selectedDirection} onChange={e => setSelectedDirection(e.target.value)}
-              className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2 px-3 text-sm font-medium text-slate-700 outline-none appearance-none cursor-pointer"
-              style={SELECT_STYLE}>
-              {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-          {/* 車道 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
-              <Layers className="w-3.5 h-3.5" /> 車道
-            </label>
-            <select value={selectedLane} onChange={e => setSelectedLane(e.target.value)}
-              className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2 px-3 text-sm font-medium text-slate-700 outline-none appearance-none cursor-pointer"
-              style={SELECT_STYLE}>
-              {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-          {/* IRI 日期 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-blue-500 flex items-center gap-1 uppercase tracking-wider">
-              <Activity className="w-3.5 h-3.5" /> IRI 施工後日期
-            </label>
-            <select value={selectedIriDate} onChange={e => setSelectedIriDate(e.target.value)}
-              className="w-full border border-blue-200 bg-blue-50 rounded-lg py-2 px-3 text-sm font-bold text-blue-700 outline-none appearance-none cursor-pointer"
-              style={SELECT_STYLE}>
-              {availableIriDates.length > 0
-                ? availableIriDates.map(d => <option key={d} value={d}>{d}</option>)
-                : <option value="">無資料</option>}
-            </select>
-          </div>
-          {/* SN 日期 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-purple-500 flex items-center gap-1 uppercase tracking-wider">
-              <Activity className="w-3.5 h-3.5" /> SN 施工後日期
-            </label>
-            <select value={selectedSnDate} onChange={e => setSelectedSnDate(e.target.value)}
-              className="w-full border border-purple-200 bg-purple-50 rounded-lg py-2 px-3 text-sm font-bold text-purple-700 outline-none appearance-none cursor-pointer"
-              style={SELECT_STYLE}>
-              {availableSnDates.length > 0
-                ? availableSnDates.map(d => <option key={d} value={d}>{d}</option>)
-                : <option value="">無資料</option>}
-            </select>
-          </div>
-        </div>
-
-        {/* ── 對比模式下的資料庫比對日期設定 */}
-        {compareMode && (
-          <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <GitCompare className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-bold text-indigo-900">
-                  前後對比比對資料設定 — 施工里程範圍：{formatSegmentsText(constSegments)}
+            {/* 檔案晶片 */}
+            {fileRecords.map(r => (
+              <div 
+                key={r.id} 
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200/80 rounded-lg text-xs text-slate-700 shadow-2xs max-w-[280px]"
+                title={r.fileName}
+              >
+                <span className={`text-[10px] font-black px-1.5 py-0.2 rounded uppercase ${
+                  r.type === 'iri' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                }`}>
+                  {r.type}
+                </span>
+                <span className="truncate text-slate-600 text-xs font-medium">{r.fileName}</span>
+                <span className="text-[11px] font-bold text-emerald-600 shrink-0">
+                  {r.count}筆
                 </span>
               </div>
-              <span className="text-[11px] text-indigo-600 font-medium bg-indigo-100/70 px-2.5 py-0.5 rounded-full">
-                資料庫資料已自動限制於施工區間內（跳區不顯示）
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" /> 資料庫比對 IRI 日期
-                </label>
-                <select value={selectedDbIriDate} onChange={e => setSelectedDbIriDate(e.target.value)}
-                  className="w-full border border-indigo-200 bg-white rounded-lg py-1.5 px-3 text-xs font-bold text-indigo-800 outline-none appearance-none cursor-pointer"
-                  style={SELECT_STYLE}>
-                  {availableDbIriDates.length > 0
-                    ? availableDbIriDates.map(d => <option key={d} value={d}>{d} {d < selectedIriDate ? '(施工前)' : ''}</option>)
-                    : <option value="">無比對資料</option>}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" /> 資料庫比對 SN 日期
-                </label>
-                <select value={selectedDbSnDate} onChange={e => setSelectedDbSnDate(e.target.value)}
-                  className="w-full border border-indigo-200 bg-white rounded-lg py-1.5 px-3 text-xs font-bold text-indigo-800 outline-none appearance-none cursor-pointer"
-                  style={SELECT_STYLE}>
-                  {availableDbSnDates.length > 0
-                    ? availableDbSnDates.map(d => <option key={d} value={d}>{d} {d < selectedSnDate ? '(施工前)' : ''}</option>)
-                    : <option value="">無比對資料</option>}
-                </select>
-              </div>
-            </div>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* ── IRI 免測統計模式切換（常駐顯示） */}
-      <div className="flex items-center gap-2 flex-wrap bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-          <ShieldOff className="w-3.5 h-3.5 text-amber-600" />
-          IRI 免測統計模式：
-        </span>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {([
-            { mode: 'all' as IriExemptMode, label: '全採納', id: 'const-btn-mode-all', color: 'bg-slate-700' },
-            { mode: 'exclude' as IriExemptMode, label: '扣除免測', id: 'const-btn-mode-exclude', color: 'bg-amber-600' },
-            { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', id: 'const-btn-mode-low-accept', color: 'bg-blue-600' },
-          ]).map(({ mode, label, id, color }) => (
+          {/* 右側：動作按鈕群 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {parsing && (
+              <span className="flex items-center gap-1 text-xs text-blue-600 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />解析中...
+              </span>
+            )}
             <button
-              key={mode}
-              id={id}
-              onClick={() => handleModeChange(mode)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                currentIriExemptMode === mode
-                  ? `${color} text-white shadow-sm ring-2 ring-offset-1 ring-slate-400`
-                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+              onClick={() => iriFileRef.current?.click()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" /> 追加 IRI
+            </button>
+            <button
+              onClick={() => snFileRef.current?.click()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" /> 追加 SN
+            </button>
+            <button
+              onClick={() => setCompareMode(m => !m)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs ${
+                compareMode
+                  ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-200'
+                  : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50/60'
               }`}
             >
-              {label}
+              <GitCompare className="w-3.5 h-3.5" />
+              <span>{compareMode ? '前後對比 ON' : '開啟前後對比'}</span>
             </button>
-          ))}
+            <button
+              onClick={clearAll}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+              title="清空目前暫存資料"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> 清空
+            </button>
+          </div>
         </div>
-        {onNavigateToExemptZones && (
-          <button
-            type="button"
-            onClick={onNavigateToExemptZones}
-            className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="前往專屬分頁維護免測路段資料庫"
-          >
-            <span>前往維護免測路段 ({exemptZones.length})</span>
-            <span>→</span>
-          </button>
-        )}
+
+        {/* 2. 主篩選與檢測日期區域 (Filters & Date Configuration) */}
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5">
+            {/* 路線 */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                <Map className="w-3.5 h-3.5 text-slate-400" /> 路線
+              </label>
+              <select 
+                value={selectedRoute} 
+                onChange={e => setSelectedRoute(e.target.value)}
+                className="w-full border border-slate-200 bg-slate-50 hover:bg-white rounded-lg py-2 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors appearance-none cursor-pointer"
+                style={SELECT_STYLE}
+              >
+                {routes.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+
+            {/* 方向 */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                <Compass className="w-3.5 h-3.5 text-slate-400" /> 方向
+              </label>
+              <select 
+                value={selectedDirection} 
+                onChange={e => setSelectedDirection(e.target.value)}
+                className="w-full border border-slate-200 bg-slate-50 hover:bg-white rounded-lg py-2 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors appearance-none cursor-pointer"
+                style={SELECT_STYLE}
+              >
+                {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+
+            {/* 車道 */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                <Layers className="w-3.5 h-3.5 text-slate-400" /> 車道
+              </label>
+              <select 
+                value={selectedLane} 
+                onChange={e => setSelectedLane(e.target.value)}
+                className="w-full border border-slate-200 bg-slate-50 hover:bg-white rounded-lg py-2 px-3 text-xs font-semibold text-slate-700 outline-none transition-colors appearance-none cursor-pointer"
+                style={SELECT_STYLE}
+              >
+                {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+
+            {/* IRI 施工後日期 */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                <Activity className="w-3.5 h-3.5" /> IRI 施工後日期
+              </label>
+              <select 
+                value={selectedIriDate} 
+                onChange={e => setSelectedIriDate(e.target.value)}
+                className="w-full border border-blue-200 bg-blue-50/60 hover:bg-blue-50 rounded-lg py-2 px-3 text-xs font-bold text-blue-700 outline-none transition-colors appearance-none cursor-pointer"
+                style={SELECT_STYLE}
+              >
+                {availableIriDates.length > 0
+                  ? availableIriDates.map(d => <option key={d} value={d}>{d}</option>)
+                  : <option value="">無資料</option>}
+              </select>
+            </div>
+
+            {/* SN 施工後日期 */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-purple-600 flex items-center gap-1 uppercase tracking-wider">
+                <Activity className="w-3.5 h-3.5" /> SN 施工後日期
+              </label>
+              <select 
+                value={selectedSnDate} 
+                onChange={e => setSelectedSnDate(e.target.value)}
+                className="w-full border border-purple-200 bg-purple-50/60 hover:bg-purple-50 rounded-lg py-2 px-3 text-xs font-bold text-purple-700 outline-none transition-colors appearance-none cursor-pointer"
+                style={SELECT_STYLE}
+              >
+                {availableSnDates.length > 0
+                  ? availableSnDates.map(d => <option key={d} value={d}>{d}</option>)
+                  : <option value="">無資料</option>}
+              </select>
+            </div>
+          </div>
+
+          {/* 前後對比比對日期行（僅在對比模式開啟時平順展開，不另外嵌套大框） */}
+          {compareMode && (
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-indigo-50/40 p-3 rounded-xl border border-indigo-100/70">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                  <GitCompare className="w-3.5 h-3.5 text-indigo-600" />
+                  歷史資料庫對照：
+                </span>
+                <span className="text-[11px] font-medium text-slate-600 bg-white px-2 py-0.5 rounded border border-indigo-100" title={formatSegmentsText(constSegments)}>
+                  施工區間：{formatSegmentsText(constSegments)}
+                </span>
+                <span className="text-[10px] text-indigo-600 bg-indigo-100/60 px-2 py-0.5 rounded-full font-medium">
+                  自動鎖定施工里程與車道
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-slate-600">比對 IRI:</span>
+                  <select 
+                    value={selectedDbIriDate} 
+                    onChange={e => setSelectedDbIriDate(e.target.value)}
+                    className="border border-indigo-200 bg-white rounded-lg py-1 px-2 text-xs font-bold text-indigo-800 outline-none appearance-none cursor-pointer"
+                    style={SELECT_STYLE}
+                  >
+                    {availableDbIriDates.length > 0
+                      ? availableDbIriDates.map(d => <option key={d} value={d}>{d} {d < selectedIriDate ? '(施工前)' : ''}</option>)
+                      : <option value="">無比對資料</option>}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-slate-600">比對 SN:</span>
+                  <select 
+                    value={selectedDbSnDate} 
+                    onChange={e => setSelectedDbSnDate(e.target.value)}
+                    className="border border-indigo-200 bg-white rounded-lg py-1 px-2 text-xs font-bold text-indigo-800 outline-none appearance-none cursor-pointer"
+                    style={SELECT_STYLE}
+                  >
+                    {availableDbSnDates.length > 0
+                      ? availableDbSnDates.map(d => <option key={d} value={d}>{d} {d < selectedSnDate ? '(施工前)' : ''}</option>)
+                      : <option value="">無比對資料</option>}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. 面板底部工具列 (IRI 免測統計模式與維護連結) */}
+        <div className="px-5 py-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <ShieldOff className="w-3.5 h-3.5 text-amber-600" />
+              IRI 免測統計模式：
+            </span>
+            <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg">
+              {([
+                { mode: 'all' as IriExemptMode, label: '全採納', id: 'const-btn-mode-all' },
+                { mode: 'exclude' as IriExemptMode, label: '扣除免測', id: 'const-btn-mode-exclude' },
+                { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', id: 'const-btn-mode-low-accept' },
+              ]).map(({ mode, label, id }) => {
+                const isActive = currentIriExemptMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    id={id}
+                    onClick={() => handleModeChange(mode)}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                      isActive
+                        ? 'bg-white text-slate-800 shadow-xs ring-1 ring-slate-300'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {onNavigateToExemptZones && (
+            <button
+              type="button"
+              onClick={onNavigateToExemptZones}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 transition-colors"
+            >
+              <span>前往維護免測路段 ({exemptZones.length})</span>
+              <span>→</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 免測扣除提示 */}

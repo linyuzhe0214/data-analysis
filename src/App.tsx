@@ -728,8 +728,8 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Filters（在免測維護分頁時隱藏以維持純淨介面） */}
-            {activeTab !== 'exempt-zones' && (
+            {/* Filters（僅在趨勢圖與色塊圖分頁顯示；施工品質檢視與免測維護有各自專屬介面，避免頂部重複與多餘層次） */}
+            {(activeTab === 'trends' || activeTab === 'iri-map') && (
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
