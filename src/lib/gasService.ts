@@ -5,7 +5,7 @@ import { RawSnData, RawIriData } from './excelParser';
 export const GAS_URL: string = import.meta.env.VITE_GAS_URL || '';
 
 // GAS API Secret（對應 GAS ScriptProperties 的 API_SECRET）
-const API_KEY: string = import.meta.env.VITE_GAS_API_KEY || '';
+const API_KEY: string = import.meta.env.VITE_GAS_API_KEY || import.meta.env.VITE_GAS_API_TOKEN || '';
 
 /** 幫所有 GAS 請求附加 key= 參數（若無設定則略過）*/
 function buildUrl(base: string, params: Record<string, string> = {}): string {

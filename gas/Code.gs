@@ -9,16 +9,17 @@
 // ═══════════════════════════════════════════════════════════
 
 const SS_ID     = PropertiesService.getScriptProperties().getProperty('SS_ID');
-const API_SECRET = PropertiesService.getScriptProperties().getProperty('API_SECRET');
+const API_SECRET = PropertiesService.getScriptProperties().getProperty('API_SECRET') || PropertiesService.getScriptProperties().getProperty('API_TOKEN');
 
 // ─── Auth helper ─────────────────────────────────────────
 function isAuthorized(e) {
-  // 嚴格 Fail-Closed：若 ScriptProperties 未設定 API_SECRET，一律拒絕所有存取
+  // 嚴格 Fail-Closed：若 ScriptProperties 未設定 API_SECRET / API_TOKEN，一律拒絕所有存取
   if (!API_SECRET || API_SECRET.trim().length === 0) {
     console.error('[Auth] API_SECRET is not configured in ScriptProperties. Failing closed.');
     return false;
   }
-  return e && e.parameter && e.parameter.key === API_SECRET;
+  var key = (e && e.parameter) ? (e.parameter.key || e.parameter.token) : null;
+  return key === API_SECRET;
 }
 
 const SN_SHEET = 'SN_Data';

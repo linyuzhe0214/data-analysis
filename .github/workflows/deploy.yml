@@ -36,7 +36,8 @@ jobs:
       - name: Build
         env:
           VITE_GAS_URL: ${{ secrets.VITE_GAS_URL }}
-          VITE_GAS_API_KEY: ${{ secrets.VITE_GAS_API_KEY }}
+          VITE_GAS_API_KEY: ${{ secrets.VITE_GAS_API_KEY || secrets.VITE_GAS_API_TOKEN }}
+          VITE_GAS_API_TOKEN: ${{ secrets.VITE_GAS_API_TOKEN || secrets.VITE_GAS_API_KEY }}
           # 將 /repo-name/ 改成你的 GitHub 倉庫名稱
           VITE_BASE_PATH: /data-analysis/
         run: npm run build
