@@ -156,46 +156,48 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
   }, [parsedPreview]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <TableIcon className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-800">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <TableIcon className="w-4 h-4" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
               智慧匯入精靈 - {type === 'iri' ? 'IRI 報表' : 'SN 報表'}
             </h2>
-            <span className="text-sm font-medium text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-mono font-bold text-slate-600 bg-slate-200/70 px-2.5 py-1 rounded-full tabular-nums">
               共 {files.length} 個檔案
             </span>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
+        <div className="flex-1 overflow-auto flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-100">
           
           {/* 左側：設定區 */}
-          <div className="w-full md:w-1/3 p-6 bg-slate-50 overflow-y-auto space-y-8">
+          <div className="w-full md:w-1/3 p-6 bg-slate-50/50 overflow-y-auto space-y-6">
             {/* Step 1 */}
             <div>
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm">1</span>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 tracking-tight">
+                <span className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono">1</span>
                 指定表頭與欄位
               </h3>
               
               {headerRowIndex === -1 ? (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex gap-2">
-                  <AlertTriangle className="w-5 h-5 shrink-0" />
-                  請先在右側預覽區點擊「設為表頭」，以指定欄位名稱所在的列。
+                <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs text-amber-800 flex gap-2.5 items-start">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <span>請先在右側預覽區點擊「設為表頭」，以指定欄位名稱所在的列。</span>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-600 mb-2">已選擇第 {headerRowIndex + 1} 列作為表頭，請確認系統猜測的對應欄位是否正確：</p>
+                  <p className="text-xs text-slate-500 mb-2">已選擇第 <span className="font-mono font-bold text-slate-700">{headerRowIndex + 1}</span> 列作為表頭，請確認系統猜測的對應欄位：</p>
                   
-                  <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                  <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
                     {/* 必填欄位 */}
-                    <div className="font-medium text-xs text-slate-400 uppercase tracking-wider mb-2 border-b pb-1">必填欄位</div>
+                    <div className="font-bold text-[11px] text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1.5">必填欄位</div>
                     <FieldSelect label="里程" value={rule.columns.mileage} options={headerRow} onChange={(v) => handleColumnChange('mileage', v)} required />
                     {type === 'iri' ? (
                       <>
@@ -207,7 +209,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
                     )}
 
                     {/* 選填欄位 */}
-                    <div className="font-medium text-xs text-slate-400 uppercase tracking-wider mt-4 mb-2 border-b pb-1">屬性欄位</div>
+                    <div className="font-bold text-[11px] text-slate-400 uppercase tracking-wider mt-4 mb-2 border-b border-slate-100 pb-1.5">屬性欄位</div>
                     <FieldSelect label="日期" value={rule.columns.date} options={headerRow} onChange={(v) => handleColumnChange('date', v)} />
                     {type === 'iri' && <FieldSelect label="時間" value={rule.columns.time} options={headerRow} onChange={(v) => handleColumnChange('time', v)} />}
                     <FieldSelect label="路線" value={rule.columns.route} options={headerRow} onChange={(v) => handleColumnChange('route', v)} />
@@ -219,17 +221,17 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
             </div>
 
             {/* Step 2 */}
-            <div className={`${headerRowIndex === -1 ? 'opacity-50 pointer-events-none' : ''}`}>
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
-                <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm">2</span>
+            <div className={`${headerRowIndex === -1 ? 'opacity-40 pointer-events-none' : ''}`}>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-2 tracking-tight">
+                <span className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold font-mono">2</span>
                 全域與工作表補齊
               </h3>
-              <p className="text-sm text-slate-500 mb-3">
-                若報表中沒有這些欄位，請在這裡手動指定，或選擇自動擷取，設定將套用到這批所有檔案與工作表中。
+              <p className="text-xs text-slate-400 mb-3">
+                若報表中無此欄位可在此手動指定或自動擷取，設定將套用到所有工作表。
               </p>
               
-              <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="建議格式: 20240514 或 2024-05-14" showAutoDetect />
+              <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <GlobalInput label="預設日期" value={rule.globals.date} onChange={(v) => handleGlobalChange('date', v)} placeholder="格式: 20240514 或 2024-05-14" showAutoDetect />
                 <GlobalSelect label="預設路線" value={rule.globals.route} onChange={(v) => handleGlobalChange('route', v)} />
                 {type === 'iri' && <GlobalSelect label="預設方向" value={rule.globals.direction} onChange={(v) => handleGlobalChange('direction', v)} />}
                 <GlobalSelect label="預設車道" value={rule.globals.lane} onChange={(v) => handleGlobalChange('lane', v)} />
@@ -369,10 +371,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between shrink-0">
           <button 
             onClick={onCancel}
-            className="px-6 py-2.5 text-slate-600 hover:text-slate-800 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-slate-600 hover:text-slate-900 text-xs font-semibold hover:bg-slate-200/60 rounded-xl transition-colors btn-press cursor-pointer"
           >
             取消匯入
           </button>
@@ -382,10 +384,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
               disabled={requiredFieldsMissing || previewLoading}
               onClick={handleGeneratePreview}
               className={`
-                flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm
+                flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs btn-press cursor-pointer
                 ${requiredFieldsMissing 
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-md'
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                  : 'bg-slate-900 text-white hover:bg-slate-800'
                 }
               `}
             >
@@ -395,9 +397,9 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
           ) : (
             <button 
               onClick={() => onConfirm(rule)}
-              className="flex items-center gap-2 px-8 py-2.5 rounded-lg font-bold transition-all shadow-sm bg-green-600 text-white hover:bg-green-700 hover:shadow-md"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs bg-emerald-600 text-white hover:bg-emerald-700 btn-press cursor-pointer"
             >
-              <CheckCircle className="w-5 h-5" />
+              <CheckCircle className="w-4 h-4" />
               確認無誤，正式寫入資料庫
             </button>
           )}
@@ -411,15 +413,15 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ files, type, onConfi
 
 const FieldSelect = ({ label, value, options, onChange, required }: { label: string, value?: number, options: string[], onChange: (v: string) => void, required?: boolean }) => (
   <div className="flex items-center gap-3">
-    <label className="w-20 shrink-0 text-sm font-medium text-slate-700 text-right flex items-center justify-end gap-1">
+    <label className="w-20 shrink-0 text-xs font-semibold text-slate-700 text-right flex items-center justify-end gap-1">
       {required && <span className="text-red-500">*</span>} {label} :
     </label>
     <select 
       value={value === undefined ? '' : value} 
       onChange={e => onChange(e.target.value)}
       className={`
-        flex-1 border rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none
-        ${value === undefined && required ? 'border-amber-400 bg-amber-50' : 'border-slate-300 bg-slate-50'}
+        flex-1 border rounded-xl py-1.5 px-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color]
+        ${value === undefined && required ? 'border-amber-300 bg-amber-50/60 text-amber-900' : 'border-slate-200 bg-slate-50/70 focus:bg-white text-slate-800'}
       `}
     >
       <option value="">-- 請選擇欄位 --</option>
@@ -432,19 +434,19 @@ const FieldSelect = ({ label, value, options, onChange, required }: { label: str
 
 const GlobalInput = ({ label, value, onChange, placeholder, showAutoDetect }: { label: string, value?: string, onChange: (v: string) => void, placeholder?: string, showAutoDetect?: boolean }) => (
   <div className="flex items-center gap-3">
-    <label className="w-20 shrink-0 text-sm font-medium text-slate-700 text-right">{label} :</label>
+    <label className="w-20 shrink-0 text-xs font-semibold text-slate-700 text-right">{label} :</label>
     <div className="flex-1 flex items-center gap-2">
       <input 
         type="text"
         value={value === '__SHEET_NAME__' ? '✨ 從工作表自動擷取' : (value || '')}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`flex-1 border rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${value === '__SHEET_NAME__' ? 'bg-blue-50 text-blue-700 font-medium border-blue-200' : 'bg-slate-50 border-slate-300'}`}
+        className={`flex-1 border rounded-xl py-1.5 px-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color] ${value === '__SHEET_NAME__' ? 'bg-blue-50/80 text-blue-700 font-semibold border-blue-200' : 'bg-slate-50/70 focus:bg-white border-slate-200 text-slate-800'}`}
       />
       {showAutoDetect && value !== '__SHEET_NAME__' && (
         <button 
           onClick={() => onChange('__SHEET_NAME__')}
-          className="shrink-0 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+          className="shrink-0 px-2.5 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-xl border border-blue-200/80 hover:bg-blue-100 transition-colors btn-press cursor-pointer"
         >
           ✨ 自動擷取
         </button>
@@ -452,7 +454,7 @@ const GlobalInput = ({ label, value, onChange, placeholder, showAutoDetect }: { 
       {showAutoDetect && value === '__SHEET_NAME__' && (
         <button 
           onClick={() => onChange('')}
-          className="shrink-0 px-3 py-1.5 text-xs font-medium bg-slate-100 text-slate-600 rounded border border-slate-200 hover:bg-slate-200 transition-colors"
+          className="shrink-0 px-2.5 py-1.5 text-xs font-semibold bg-slate-100 text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-200 transition-colors btn-press cursor-pointer"
         >
           手動輸入
         </button>
@@ -463,11 +465,11 @@ const GlobalInput = ({ label, value, onChange, placeholder, showAutoDetect }: { 
 
 const GlobalSelect = ({ label, value, onChange }: { label: string, value?: string, onChange: (v: string) => void }) => (
   <div className="flex items-center gap-3">
-    <label className="w-20 shrink-0 text-sm font-medium text-slate-700 text-right">{label} :</label>
+    <label className="w-20 shrink-0 text-xs font-semibold text-slate-700 text-right">{label} :</label>
     <select 
       value={value || ''} 
       onChange={e => onChange(e.target.value)}
-      className="flex-1 border border-slate-300 bg-slate-50 rounded-md py-1.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+      className="flex-1 border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-1.5 px-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color] text-slate-800"
     >
       <option value="">-- 不指定預設值 --</option>
       <option value="__SHEET_NAME__">✨ 從工作表名稱自動擷取</option>

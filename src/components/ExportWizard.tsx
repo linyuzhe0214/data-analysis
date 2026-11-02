@@ -94,14 +94,19 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Download className="w-5 h-5 text-blue-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5 tracking-tight">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Download className="w-4 h-4" />
+            </div>
             匯出資料至系統範本
           </h2>
-          <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+          <button 
+            onClick={onClose} 
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors btn-press cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -109,38 +114,46 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
         <div className="p-6 overflow-y-auto space-y-6">
           {/* 基本篩選 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <Settings2 className="w-4 h-4 text-slate-400" /> 匯出資料篩選
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">資料種類</label>
-                <select 
-                  value={category} 
-                  onChange={(e) => setCategory(e.target.value as any)}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                >
-                  <option value="SN">SN 值</option>
-                  <option value="PRQI">PRQI 值</option>
-                  <option value="IRI">IRI 值</option>
-                </select>
+            
+            {/* 資料種類 Segmented Switcher */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">資料種類</label>
+              <div className="inline-flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                {(['SN', 'PRQI', 'IRI'] as const).map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className={`px-4 py-1.5 rounded-lg transition-[background-color,color] duration-150 cursor-pointer btn-press ${
+                      category === cat ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {cat} 指標
+                  </button>
+                ))}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">路線篩選</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">路線篩選</label>
                 <select 
                   value={selectedRoute} 
                   onChange={(e) => setSelectedRoute(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 >
                   {routes.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">檢測時間</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">檢測時間</label>
                 <select 
                   value={selectedDate} 
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm font-mono font-semibold text-slate-800 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color] disabled:bg-slate-100 disabled:text-slate-400"
                   disabled={availableDates.length === 0}
                 >
                   {availableDates.length === 0 ? (
@@ -157,31 +170,33 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
 
           {/* 統一值設定 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-slate-400" /> 報表通用欄位設定
-            </h3>
-            <p className="text-xs text-slate-500">以下欄位將會統一帶入匯出的 Excel 檔案中所有資料列。</p>
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Settings2 className="w-4 h-4 text-slate-400" /> 報表通用欄位設定
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">以下欄位將統一帶入匯出的 Excel 檔案中所有資料列。</p>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">檢測單位</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">檢測單位</label>
                 <input 
                   type="text" name="unit" value={manualValues.unit} onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">檢測人員</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">檢測人員</label>
                 <input 
                   type="text" name="personnel" value={manualValues.personnel} onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">天氣</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">天氣</label>
                 <select 
                   name="weather" value={manualValues.weather} onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 >
                   <option value="晴">晴</option>
                   <option value="陰">陰</option>
@@ -190,31 +205,31 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">資料說明</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">資料說明</label>
                 <input 
                   type="text" name="description" value={manualValues.description} onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">TMP (若未知填 0)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">TMP (若未知填 0)</label>
                 <input 
                   type="number" name="tmp" value={manualValues.tmp} onChange={handleInputChange} step="0.1"
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm font-mono focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">ATMP (若未知填 0)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">ATMP (若未知填 0)</label>
                 <input 
                   type="number" name="atmp" value={manualValues.atmp} onChange={handleInputChange} step="0.1"
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm font-mono focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">是否為考評用</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">是否為考評用</label>
                 <select 
                   name="isAssessment" value={manualValues.isAssessment} onChange={handleInputChange}
-                  className="w-full border border-slate-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-200 bg-slate-50/70 focus:bg-white rounded-xl py-2 px-3 text-xs sm:text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none transition-[border-color,background-color]"
                 >
                   <option value="是">是</option>
                   <option value="否">否</option>
@@ -224,16 +239,16 @@ export const ExportWizard: React.FC<ExportWizardProps> = ({ data, onClose }) => 
           </div>
         </div>
 
-        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <div className="p-5 border-t border-slate-100 bg-slate-50/60 flex justify-end gap-2.5">
           <button 
             onClick={onClose}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60 transition-colors btn-press cursor-pointer"
           >
             取消
           </button>
           <button 
             onClick={handleExport}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 transition-colors shadow-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed btn-press cursor-pointer"
             disabled={!selectedDate || availableDates.length === 0}
           >
             <Download className="w-4 h-4" />

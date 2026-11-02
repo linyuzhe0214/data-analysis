@@ -109,19 +109,19 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
   const dirsForRoute = ["（全方向）", ...directions.filter(d => d !== "雙向")];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
       <button
         id="btn-toggle-exempt-manager"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/70 transition-colors cursor-pointer"
       >
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-50 rounded-lg">
-            <ShieldOff className="w-4 h-4 text-amber-600" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <ShieldOff className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-slate-800">免測路段管理</span>
+          <span className="text-sm font-bold text-slate-900 tracking-tight">免測路段管理</span>
           {zones.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
+            <span className="ml-1 px-2 py-0.5 bg-amber-100/80 text-amber-800 text-xs font-mono font-semibold tabular-nums rounded-full">
               {zones.length} 條規則
             </span>
           )}
@@ -131,41 +131,51 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
 
       {open && (
         <div className="px-5 pb-5 pt-1 border-t border-slate-100 space-y-4">
-          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-            <div className="flex gap-2 flex-wrap">
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-semibold">
+          <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/60 space-y-3">
+            <div className="flex gap-2.5 flex-wrap items-center">
+              <div className="inline-flex bg-slate-200/60 p-0.5 rounded-xl text-xs font-semibold">
                 <button
                   id="btn-exempt-type-range"
                   type="button"
                   onClick={() => setType("range")}
-                  className={`px-3 py-1.5 transition-colors cursor-pointer ${type === "range" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+                  className={`px-3 py-1 rounded-lg transition-[background-color,color] duration-150 cursor-pointer btn-press ${
+                    type === "range" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
                 >範圍</button>
                 <button
                   id="btn-exempt-type-point"
                   type="button"
                   onClick={() => setType("point")}
-                  className={`px-3 py-1.5 transition-colors cursor-pointer ${type === "point" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+                  className={`px-3 py-1 rounded-lg transition-[background-color,color] duration-150 cursor-pointer btn-press ${
+                    type === "point" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
                 >單點 (支援多點)</button>
               </div>
-              <select
-                id="select-exempt-route"
-                value={route}
-                onChange={e => setRoute(e.target.value)}
-                className="border border-slate-200 bg-white rounded-lg px-2 py-1.5 text-xs text-slate-700 outline-none cursor-pointer"
-              >
-                {routes.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <select
-                id="select-exempt-direction"
-                value={direction || "（全方向）"}
-                onChange={e => setDirection(e.target.value === "（全方向）" ? "" : e.target.value)}
-                className="border border-slate-200 bg-white rounded-lg px-2 py-1.5 text-xs text-slate-700 outline-none cursor-pointer"
-              >
-                {dirsForRoute.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+              <div className="relative">
+                <select
+                  id="select-exempt-route"
+                  value={route}
+                  onChange={e => setRoute(e.target.value)}
+                  className="border border-slate-200 bg-white rounded-xl py-1.5 pl-3 pr-7 text-xs font-semibold text-slate-800 outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500/20"
+                >
+                  {routes.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select
+                  id="select-exempt-direction"
+                  value={direction || "（全方向）"}
+                  onChange={e => setDirection(e.target.value === "（全方向）" ? "" : e.target.value)}
+                  className="border border-slate-200 bg-white rounded-xl py-1.5 pl-3 pr-7 text-xs font-semibold text-slate-800 outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500/20"
+                >
+                  {dirsForRoute.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
             </div>
 
-            <div className="flex gap-2 flex-wrap items-center">
+            <div className="flex gap-2.5 flex-wrap items-center">
               {type === "point" ? (
                 <input
                   id="input-exempt-point-mileage"
@@ -173,7 +183,7 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                   placeholder="里程 (例: 23100 或 23k+100，支援逗號多筆)"
                   value={mileage}
                   onChange={e => setMileage(e.target.value)}
-                  className="flex-1 min-w-[220px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                  className="flex-1 min-w-[220px] border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color]"
                 />
               ) : (
                 <>
@@ -183,16 +193,16 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                     placeholder="起點 (例: 23100 或 23k+100)"
                     value={start}
                     onChange={e => setStart(e.target.value)}
-                    className="flex-1 min-w-[140px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                    className="flex-1 min-w-[130px] border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color]"
                   />
-                  <span className="text-slate-400 text-xs">～</span>
+                  <span className="text-slate-400 text-xs font-bold">～</span>
                   <input
                     id="input-exempt-end-mileage"
                     type="text"
                     placeholder="終點 (例: 24000 或 24k+000)"
                     value={end}
                     onChange={e => setEnd(e.target.value)}
-                    className="flex-1 min-w-[140px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                    className="flex-1 min-w-[130px] border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color]"
                   />
                 </>
               )}
@@ -202,13 +212,13 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                 placeholder="備註 (例: 橋梁伸縮縫)"
                 value={label}
                 onChange={e => setLabel(e.target.value)}
-                className="flex-1 min-w-[120px] border border-slate-200 bg-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 min-w-[120px] border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-[border-color,background-color]"
               />
               <button
                 id="btn-exempt-add"
                 type="button"
                 onClick={add}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer btn-press"
               >
                 <PlusCircle className="w-3.5 h-3.5" />新增
               </button>
@@ -217,15 +227,15 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <span className="text-xs font-semibold text-slate-600">
-              免測規則清單 ({zones.length})
+            <span className="text-xs font-semibold text-slate-700">
+              免測規則清單 (<span className="font-mono tabular-nums">{zones.length}</span>)
             </span>
             {zones.length > 0 && (
               <button
                 id="btn-exempt-clear-all"
                 type="button"
                 onClick={clearAll}
-                className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded transition-all cursor-pointer font-medium"
+                className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium btn-press"
                 title="清空所有免測規則"
               >
                 <Trash2 className="w-3 h-3" />
@@ -235,26 +245,26 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
           </div>
 
           {zones.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-2">尚未設定免測路段</p>
+            <p className="text-xs text-slate-400 text-center py-3">尚未設定免測路段</p>
           ) : (
             <div className="space-y-1.5 max-h-60 overflow-y-auto">
               {zones.map(z => (
-                <div key={z.id} className="flex items-center justify-between bg-amber-50/80 border border-amber-200/80 rounded-lg px-3 py-2 text-xs hover:bg-amber-50 transition-colors">
+                <div key={z.id} className="flex items-center justify-between bg-amber-50/60 border border-amber-200/60 rounded-xl px-3.5 py-2 text-xs hover:bg-amber-50/90 transition-colors">
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <span className="shrink-0 px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded font-semibold text-[11px]">
+                    <span className="shrink-0 px-2 py-0.5 bg-amber-200/80 text-amber-900 rounded-md font-semibold text-[11px]">
                       {z.type === "point" ? "單點" : "範圍"}
                     </span>
-                    <span className="font-bold text-slate-800 shrink-0">{z.route}</span>
-                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                      z.direction ? "bg-blue-100 text-blue-700" : "bg-slate-200/70 text-slate-700"
+                    <span className="font-bold text-slate-900 shrink-0">{z.route}</span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                      z.direction ? "bg-blue-50 text-blue-700 border border-blue-200/60" : "bg-slate-200/70 text-slate-700"
                     }`}>
                       {z.direction || "全方向"}
                     </span>
-                    <span className="text-blue-700 font-mono font-semibold tracking-wide">
+                    <span className="text-blue-600 font-mono font-bold tracking-wide tabular-nums">
                       {z.type === "point" ? formatMileage(z.mileage) : `${formatMileage(z.start)} ～ ${formatMileage(z.end)}`}
                     </span>
                     {z.label && (
-                      <span className="text-slate-500 bg-white/80 px-2 py-0.5 rounded border border-amber-200 text-[11px] truncate max-w-[200px]" title={z.label}>
+                      <span className="text-slate-600 bg-white/90 px-2 py-0.5 rounded-md border border-amber-200/80 text-[11px] truncate max-w-[200px]" title={z.label}>
                         {z.label}
                       </span>
                     )}
@@ -262,7 +272,7 @@ export function ExemptZoneManager({ zones, routes, directions, onChange }: Props
                   <button
                     type="button"
                     onClick={() => remove(z.id)}
-                    className="shrink-0 ml-2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1 rounded hover:bg-white/50"
+                    className="shrink-0 ml-2 text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1.5 rounded-lg hover:bg-white/80 btn-press"
                     title="刪除此規則"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

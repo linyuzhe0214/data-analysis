@@ -161,7 +161,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
   // ── 派生選項
   const routes = useMemo(() => {
     const list = Array.from(new Set(constData.map(d => normalizeRouteName(d.route)))).filter(r => r && r !== '未知路線').sort();
-    return ['全轄區', ...list];
+    return list;
   }, [constData]);
 
   const availableDirections = useMemo(() => {
@@ -1259,13 +1259,13 @@ export const ConstructionReviewPage: React.FC<Props> = ({
             )}
             <button
               onClick={() => iriFileRef.current?.click()}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer btn-press"
             >
               <Upload className="w-3.5 h-3.5" /> 追加 IRI
             </button>
             <button
               onClick={() => snFileRef.current?.click()}
-              className="flex items-center gap-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer btn-press"
             >
               <Upload className="w-3.5 h-3.5" /> 追加 SN
             </button>
@@ -1282,7 +1282,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
                   return next;
                 });
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-xs cursor-pointer btn-press ${
                 compareMode
                   ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-200'
                   : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50/60'
@@ -1293,7 +1293,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
             </button>
             <button
               onClick={clearAll}
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200/80 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-xl text-xs font-medium transition-colors cursor-pointer btn-press"
               title="清空目前暫存資料"
             >
               <Trash2 className="w-3.5 h-3.5" /> 清空

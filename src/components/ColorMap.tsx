@@ -219,11 +219,7 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
   }, [data]);
 
   if (data.length === 0) {
-    return (
-      <div className="w-full h-32 flex items-center justify-center bg-slate-100 rounded-lg border border-slate-200 text-slate-500">
-        無資料 (No Data)
-      </div>
-    );
+    return null;
   }
 
   const totalRange = maxMileage - minMileage || 1;

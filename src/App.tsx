@@ -238,7 +238,7 @@ export default function App() {
     const predefined = ['國道1號', '國道3號', '國道4號'];
     const others = dataRoutes.filter(r => !predefined.includes(r)).sort();
     const ordered = [...predefined.filter(r => dataRoutes.includes(r)), ...others];
-    return [ALL_DISTRICT_KEY, ...ordered];
+    return ordered;
   }, [data]);
 
   const availableDirections = useMemo(() => {
@@ -1163,31 +1163,47 @@ export default function App() {
                 d.iri > 0 &&
                 d.date === iriDate
               );
+              // 排除虛擬選項「雙向」，並僅展示當天確實有資料的方向（消除空白無資料區塊）
+              const validDirs = availableDirections.filter(dir => dir !== '雙向' && iriData.some(d => d.direction === dir));
+
               return availableIriDates.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-xl border border-slate-200">
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
                   <p className="text-sm">目前資料庫中沒有 IRI 檢測資料。</p>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <label className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4" /> 檢測日期：
+                  <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      檢測日期：
                     </label>
-                    <select
-                      value={iriDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="border border-slate-300 bg-white rounded-lg py-1.5 px-3 text-sm font-medium text-slate-700 outline-none cursor-pointer"
-                    >
-                      {availableIriDates.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={iriDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="border border-slate-200 bg-slate-50/70 hover:bg-white focus:bg-white rounded-xl py-1.5 pl-3 pr-8 text-xs sm:text-sm font-semibold font-mono text-slate-900 outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all appearance-none"
+                      >
+                        {availableIriDates.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
-                  {availableDirections.map(dir => (
-                    <ColorMap 
-                      key={dir}
-                      data={iriData.filter(d => d.direction === dir)} 
-                      title={`${iriDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
-                    />
-                  ))}
+
+                  {validDirs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+                      <p className="text-sm">該檢測日期查無具體方向之 IRI 資料。</p>
+                    </div>
+                  ) : (
+                    validDirs.map(dir => (
+                      <ColorMap 
+                        key={dir}
+                        data={iriData.filter(d => d.direction === dir)} 
+                        title={`${iriDate} ${selectedRoute} - ${dir} 全段 IRI 分布圖`} 
+                      />
+                    ))
+                  )}
                 </div>
               );
             })()}
