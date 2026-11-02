@@ -69,25 +69,25 @@ const CustomRangePanel: React.FC<CustomRangePanelProps> = ({ ranges, onChange, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-h-[80vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto border border-slate-200/80 transform transition-all duration-200 ease-out"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-semibold text-slate-800">自訂義 IRI 級距與顏色</h4>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+          <h4 className="text-base font-bold text-slate-900">自訂義 IRI 級距與顏色</h4>
+          <button onClick={onClose} className="btn-press w-7 h-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center text-sm">✕</button>
         </div>
 
-        <div className="space-y-2 mb-4">
+        <div className="space-y-2 mb-5">
           {draft.map((r, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-2.5 p-1.5 bg-slate-50/60 rounded-xl border border-slate-100">
               {/* 顏色 */}
               <input
                 type="color"
                 value={r.color}
                 onChange={e => update(i, 'color', e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer border border-slate-200 p-0.5"
+                className="w-8 h-8 rounded-lg cursor-pointer border border-slate-200 p-0.5 bg-white shrink-0"
               />
               {/* 標籤 */}
               <input
@@ -95,27 +95,28 @@ const CustomRangePanel: React.FC<CustomRangePanelProps> = ({ ranges, onChange, o
                 value={r.label}
                 onChange={e => update(i, 'label', e.target.value)}
                 placeholder="標籤"
-                className="flex-1 text-sm border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="flex-1 text-xs sm:text-sm border border-slate-200 bg-white rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
               {/* 上限 */}
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-slate-400">上限</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs font-medium text-slate-500">上限</span>
                 {i === draft.length - 1 ? (
-                  <span className="text-xs text-slate-400 w-16 text-center">∞</span>
+                  <span className="text-xs text-slate-400 font-mono w-16 text-center">∞</span>
                 ) : (
                   <input
                     type="number"
                     step="0.05"
                     value={r.max}
                     onChange={e => update(i, 'max', e.target.value)}
-                    className="w-16 text-sm border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-16 text-xs sm:text-sm border border-slate-200 bg-white rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono tabular-nums text-center"
                   />
                 )}
               </div>
               {/* 刪除 */}
               <button
                 onClick={() => removeRow(i)}
-                className="text-red-400 hover:text-red-600 text-sm leading-none px-1"
+                className="btn-press w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center text-xs shrink-0"
+                title="刪除此級距"
               >✕</button>
             </div>
           ))}
@@ -123,24 +124,31 @@ const CustomRangePanel: React.FC<CustomRangePanelProps> = ({ ranges, onChange, o
 
         <button
           onClick={addRow}
-          className="w-full text-sm text-blue-500 hover:text-blue-700 border border-dashed border-blue-300 hover:border-blue-500 rounded-lg py-1.5 mb-4 transition-colors"
+          className="btn-press w-full text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-dashed border-blue-300 hover:border-blue-400 rounded-xl py-2 mb-5 transition-all flex items-center justify-center gap-1.5"
         >
-          + 新增級距
+          <span>+</span> 新增級距
         </button>
 
-        <div className="flex justify-between gap-2">
+        <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-100">
           <button
             onClick={reset}
-            className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5 border border-slate-200 rounded-lg transition-colors"
+            className="btn-press text-xs font-medium text-slate-500 hover:text-slate-800 px-3 py-1.5 border border-slate-200 rounded-xl transition-all hover:bg-slate-50"
           >
             還原預設
           </button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-1.5 border border-slate-200 rounded-lg transition-colors">取消</button>
+            <button 
+              onClick={onClose} 
+              className="btn-press text-xs font-medium text-slate-600 hover:text-slate-800 px-4 py-2 border border-slate-200 rounded-xl transition-all hover:bg-slate-50"
+            >
+              取消
+            </button>
             <button
               onClick={apply}
-              className="text-sm text-white bg-blue-500 hover:bg-blue-600 px-4 py-1.5 rounded-lg transition-colors"
-            >套用</button>
+              className="btn-press text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-xl transition-all shadow-xs"
+            >
+              套用變更
+            </button>
           </div>
         </div>
       </div>
@@ -259,13 +267,13 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
         />
       )}
 
-      <div className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+      <div className="w-full bg-white p-5 rounded-2xl shadow-xs border border-slate-200/80">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3 border-b border-slate-100 pb-3">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
 
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* 圖例：可點擊切換隱藏 */}
-            <div className="flex flex-wrap gap-2 text-sm">
+            <div className="flex flex-wrap gap-1.5 text-xs">
               {ranges.map((r, i) => {
                 const hidden = hiddenRanges.has(i);
                 return (
@@ -274,17 +282,17 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
                     onClick={() => toggleRange(i)}
                     title={hidden ? '點擊顯示' : '點擊隱藏'}
                     className={cn(
-                      'flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all select-none',
+                      'btn-press flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all select-none font-medium',
                       hidden
                         ? 'opacity-40 border-slate-200 bg-slate-50'
-                        : 'opacity-100 border-transparent bg-slate-50 hover:bg-slate-100'
+                        : 'opacity-100 border-slate-200/70 bg-slate-50 hover:bg-slate-100 hover:border-slate-300'
                     )}
                   >
                     <span
-                      className="w-3 h-3 rounded-sm shrink-0"
+                      className="w-2.5 h-2.5 rounded-sm shrink-0"
                       style={{ backgroundColor: hidden ? '#cbd5e1' : r.color }}
                     />
-                    <span className={cn('text-slate-600', hidden && 'line-through text-slate-400')}>
+                    <span className={cn('text-slate-700', hidden && 'line-through text-slate-400')}>
                       {r.label}
                     </span>
                   </button>
@@ -295,7 +303,7 @@ export const ColorMap: React.FC<ColorMapProps> = ({ data, title }) => {
             {/* 自訂義按鈕 */}
             <button
               onClick={() => setShowCustomPanel(true)}
-              className="text-xs text-blue-500 hover:text-blue-700 border border-blue-200 hover:border-blue-400 rounded-lg px-3 py-1 transition-colors whitespace-nowrap"
+              className="btn-press text-xs font-medium text-slate-700 hover:text-blue-600 bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-blue-200 px-3 py-1.5 rounded-xl transition-all whitespace-nowrap"
             >
               ⚙ 自訂義級距
             </button>

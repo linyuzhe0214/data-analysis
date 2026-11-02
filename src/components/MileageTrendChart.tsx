@@ -187,34 +187,34 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
     const exempt = getExemptInfoAt(m);
 
     return (
-      <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-200 shadow-xl text-xs space-y-1.5 min-w-[200px]">
+      <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/80 shadow-xl text-xs space-y-2 min-w-[210px]">
         <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-          <span className="font-bold text-slate-700">里程: {formatMileage(m)}</span>
-          <span className="text-[10px] text-slate-400 font-mono">({m.toFixed(3)}k)</span>
+          <span className="font-semibold text-slate-800">里程：{formatMileage(m)}</span>
+          <span className="text-[10px] text-slate-400 font-mono tabular-nums">({m.toFixed(3)}k)</span>
         </div>
 
         {exempt && (
-          <div className="p-1.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 flex items-center gap-1.5">
+          <div className="p-2 bg-amber-50/80 border border-amber-200/80 rounded-xl text-amber-900 flex items-center gap-2">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <div className="leading-tight">
-              <span className="font-bold text-[11px] text-amber-900">
+              <span className="font-semibold text-[11px] text-amber-950">
                 {exempt.type === 'point' ? '伸縮縫免測單點' : '免測區間'}
               </span>
               {exempt.label && (
-                <span className="block text-[10px] text-amber-700 truncate max-w-[170px]">{exempt.label}</span>
+                <span className="block text-[10px] text-amber-700 truncate max-w-[170px] mt-0.5">{exempt.label}</span>
               )}
             </div>
           </div>
         )}
 
-        <div className="space-y-1 pt-0.5">
+        <div className="space-y-1.5 pt-0.5">
           {validPayload.map((entry: any, i: number) => (
             <div key={i} className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-slate-600">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
                 {entry.name}:
               </span>
-              <span className="font-semibold text-slate-800 font-mono">
+              <span className="font-bold text-slate-900 font-mono tabular-nums">
                 {entry.value !== undefined ? entry.value : '-'}
               </span>
             </div>
@@ -226,8 +226,8 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
 
   if (chartData.data.length === 0) {
     return (
-      <div className="w-full h-64 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500">
-        無足夠資料繪製趨勢圖 (Not enough data)
+      <div className="w-full h-64 flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-200/80 text-slate-400 text-sm">
+        無足夠資料繪製趨勢圖
       </div>
     );
   }
@@ -244,14 +244,14 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
   };
 
   return (
-    <div className="w-full bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+    <div className="w-full bg-white p-5 rounded-2xl shadow-xs border border-slate-200/80">
       {/* 標題與標記開關控制列 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 border-b border-slate-100 pb-3">
         <div>
-          <h3 className="text-lg font-bold text-slate-800">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
             {title} - {route} {direction}
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             車道：{lane || '全車道'} | 橫軸：里程位置 (k) | 縱軸：{yAxisLabel}
           </p>
         </div>
@@ -259,9 +259,9 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
         {type === 'iri' && relevantExemptZones.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {/* 免測標記小圖例說明 */}
-            <div className="flex items-center gap-3 text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-3 text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/80">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 bg-amber-200 border border-amber-400 rounded-xs"></span>
+                <span className="w-3 h-3 bg-amber-200 border border-amber-400 rounded-sm"></span>
                 免測區間
               </span>
               <span className="flex items-center gap-1.5">
@@ -274,10 +274,10 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
             <button
               type="button"
               onClick={() => setShowExemptMarkers(prev => !prev)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              className={`btn-press inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 showExemptMarkers
                   ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-xs'
-                  : 'bg-white hover:bg-slate-50 text-slate-500 border-slate-200'
+                  : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
               }`}
               title="切換是否在趨勢圖上標記免測路段與伸縮縫"
             >

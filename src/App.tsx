@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff, HardHat } from 'lucide-react';
+import { Upload, Download, Activity, AlertTriangle, CheckCircle, Map, TrendingUp, Loader2, Database, Filter, Calendar, Compass, Layers, ShieldOff, HardHat, ChevronDown, RefreshCw } from 'lucide-react';
 import { PavementData, normalizeRouteName, normalizeDirection } from './types';
 import { MileageTrendChart } from './components/MileageTrendChart';
 import { ColorMap } from './components/ColorMap';
@@ -628,21 +628,28 @@ export default function App() {
         <ExportWizard data={data} onClose={() => setShowExportWizard(false)} />
       )}
       
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <header className="bg-white/85 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Map className="w-6 h-6 text-blue-600" />
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-3">
-              高速公路鋪面檢測分析平台
-              {isSyncing && (
-                <span className="text-xs font-normal text-blue-500 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1 animate-pulse">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  同步最新資料庫中...
-                </span>
-              )}
-            </h1>
-          </div>
           <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shadow-blue-500/20">
+              <Map className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2.5 tracking-tight">
+                高速公路鋪面檢測分析平台
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  v2.0
+                </span>
+                {isSyncing && (
+                  <span className="text-xs font-normal text-blue-600 bg-blue-50/80 border border-blue-200/60 px-2 py-0.5 rounded-full flex items-center gap-1.5 animate-pulse">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    同步最新資料庫中...
+                  </span>
+                )}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
             <input 
               type="file" 
               accept=".xlsx,.xls,.csv" 
@@ -660,8 +667,8 @@ export default function App() {
               onChange={handleRawSnUpload}
             />
             {uploading && (
-              <span className="flex items-center gap-1 text-sm text-blue-600 font-medium">
-                <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="flex items-center gap-1.5 text-xs text-blue-600 font-medium px-2 py-1 bg-blue-50 rounded-lg">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 處理中...
               </span>
             )}
@@ -669,33 +676,33 @@ export default function App() {
               <button
                 onClick={() => syncFromDB(true)}
                 disabled={isSyncing}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                className="btn-press flex items-center gap-1.5 px-3 py-2 bg-slate-100/80 hover:bg-slate-200/80 border border-slate-200/80 rounded-xl text-xs sm:text-sm font-medium text-slate-700 transition-all disabled:opacity-50"
                 title="從資料庫重新同步（清除本地快取）"
               >
-                <Loader2 className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? '同步中...' : '重新同步'}
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? '同步中...' : '重新同步'}</span>
               </button>
             )}
             <button 
               onClick={() => iriFileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+              className="btn-press flex items-center gap-1.5 px-3.5 py-2 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/80 rounded-xl text-xs sm:text-sm font-medium text-blue-700 transition-all shadow-2xs"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
               匯入原始 IRI
             </button>
             <button 
               onClick={() => snFileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+              className="btn-press flex items-center gap-1.5 px-3.5 py-2 bg-orange-50/80 hover:bg-orange-100/80 border border-orange-200/80 rounded-xl text-xs sm:text-sm font-medium text-orange-800 transition-all shadow-2xs"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-3.5 h-3.5 text-orange-600" />
               匯入原始 SN
             </button>
-            <div className="w-px h-6 bg-slate-300 mx-1"></div>
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
             <button 
               onClick={() => setShowExportWizard(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+              className="btn-press flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs sm:text-sm font-medium transition-all shadow-xs"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5 text-slate-300" />
               匯出資料
             </button>
           </div>
@@ -731,97 +738,103 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Filters（僅在趨勢圖與色塊圖分頁顯示；施工品質檢視與免測維護有各自專屬介面，避免頂部重複與多餘層次） */}
+            {/* Filters */}
             {(activeTab === 'trends' || activeTab === 'iri-map') && (
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-2">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
-                  <Filter className="w-4 h-4" />
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-2">
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Filter className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-900">資料篩選條件</h3>
                 </div>
-                <h3 className="text-sm font-bold text-slate-800">資料篩選條件</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* 路線 */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Map className="w-3.5 h-3.5 text-slate-400" /> 路線
-                  </label>
-                  <select 
-                    value={selectedRoute} 
-                    onChange={(e) => setSelectedRoute(e.target.value)}
-                    className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
-                    style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
-                  >
-                    {routes.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                
-                {activeTab === 'trends' && (
-                  <>
-                    {/* 方向 */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                        <Compass className="w-3.5 h-3.5 text-slate-400" /> 方向
-                      </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* 路線 */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Map className="w-3.5 h-3.5 text-slate-400" /> 路線
+                    </label>
+                    <div className="relative">
                       <select 
-                        value={selectedDirection} 
-                        onChange={(e) => setSelectedDirection(e.target.value)}
-                        className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
-                        style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+                        value={selectedRoute} 
+                        onChange={(e) => setSelectedRoute(e.target.value)}
+                        className="w-full border border-slate-200 bg-slate-50/60 hover:bg-white rounded-xl py-2.5 pl-3.5 pr-10 text-sm font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs cursor-pointer appearance-none"
                       >
-                        {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
+                        {routes.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
+                  </div>
+                  
+                  {activeTab === 'trends' && (
+                    <>
+                      {/* 方向 */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                          <Compass className="w-3.5 h-3.5 text-slate-400" /> 方向
+                        </label>
+                        <div className="relative">
+                          <select 
+                            value={selectedDirection} 
+                            onChange={(e) => setSelectedDirection(e.target.value)}
+                            className="w-full border border-slate-200 bg-slate-50/60 hover:bg-white rounded-xl py-2.5 pl-3.5 pr-10 text-sm font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs cursor-pointer appearance-none"
+                          >
+                            {availableDirections.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      </div>
 
-                    {/* 車道 */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
-                        <Layers className="w-3.5 h-3.5 text-slate-400" /> 車道
-                      </label>
-                      <select 
-                        value={selectedLane} 
-                        onChange={(e) => setSelectedLane(e.target.value)}
-                        className="w-full border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-3 text-sm font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-blue-300 appearance-none cursor-pointer"
-                        style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
-                      >
-                        {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                  </>
-                )}
+                      {/* 車道 */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 uppercase tracking-wider">
+                          <Layers className="w-3.5 h-3.5 text-slate-400" /> 車道
+                        </label>
+                        <div className="relative">
+                          <select 
+                            value={selectedLane} 
+                            onChange={(e) => setSelectedLane(e.target.value)}
+                            className="w-full border border-slate-200 bg-slate-50/60 hover:bg-white rounded-xl py-2.5 pl-3.5 pr-10 text-sm font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs cursor-pointer appearance-none"
+                          >
+                            {availableLanes.map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
             {/* 上傳結果列表 */}
             {uploadResults.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-2">
                     <Database className="w-4 h-4 text-blue-500" />
-                    上傳紀錄
+                    上傳紀錄 ({uploadResults.length})
                   </span>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={clearLocalData}
-                      className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                      className="btn-press text-xs font-medium text-slate-400 hover:text-red-500 transition-colors"
                       title="清除本地資料庫（localStorage）"
                     >
                       清除本地資料庫
                     </button>
                     <button
                       onClick={() => setUploadResults([])}
-                      className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                      className="btn-press text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors"
                     >
                       清除紀錄
                     </button>
                   </div>
                 </div>
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-slate-100">
                   {uploadResults.map((r, idx) => (
                     <div key={idx} className="flex items-center gap-3 px-4 py-3">
                       {/* 類型標籤 */}
-                      <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${
+                      <span className={`shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
                         r.type === 'iri' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
                       }`}>
                         {r.type.toUpperCase()}
@@ -835,20 +848,20 @@ export default function App() {
                         </span>
                       )}
                       {r.status === 'uploading' && (
-                        <span className="flex items-center gap-1 text-xs text-blue-500">
+                        <span className="flex items-center gap-1 text-xs text-blue-500 font-mono tabular-nums">
                           <Loader2 className="w-3 h-3 animate-spin" />寫入資料庫 ({r.parsed} 筆)
                         </span>
                       )}
                       {r.status === 'done' && (
-                        <span className="flex items-center gap-1 text-xs text-green-600">
-                          <CheckCircle className="w-3 h-3" />
+                        <span className="flex items-center gap-1 text-xs text-emerald-600 font-mono tabular-nums">
+                          <CheckCircle className="w-3.5 h-3.5" />
                           已匯入 {r.inserted} 筆
-                          {r.message && <span className="text-slate-400"> {r.message}</span>}
+                          {r.message && <span className="text-slate-400 font-sans"> {r.message}</span>}
                         </span>
                       )}
                       {r.status === 'error' && (
                         <span className="flex items-center gap-1 text-xs text-red-500" title={r.message}>
-                          <AlertTriangle className="w-3 h-3" />
+                          <AlertTriangle className="w-3.5 h-3.5" />
                           失敗：{r.message?.slice(0, 60)}
                         </span>
                       )}
@@ -859,46 +872,42 @@ export default function App() {
             )}
 
             {/* Tabs Navigation */}
-            <div className="flex border-b border-slate-200 overflow-x-auto">
+            <div className="flex items-center p-1.5 bg-slate-200/60 backdrop-blur-xs rounded-2xl border border-slate-200/80 overflow-x-auto gap-1.5">
               <button
                 onClick={() => setActiveTab('trends')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`btn-press flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
                   activeTab === 'trends'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  歷年趨勢圖 (依里程)
-                </div>
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+                歷年趨勢圖 (依里程)
               </button>
               <button
                 onClick={() => setActiveTab('iri-map')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`btn-press flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
                   activeTab === 'iri-map'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <Map className="w-4 h-4" />
-                  IRI 色塊圖
-                </div>
+                <Map className="w-4 h-4 text-emerald-600" />
+                IRI 色塊圖
               </button>
               <button
                 id="tab-exempt-zones"
                 onClick={() => setActiveTab('exempt-zones')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                className={`btn-press flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
                   activeTab === 'exempt-zones'
-                    ? 'border-amber-600 text-amber-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
-                <ShieldOff className="w-4 h-4" />
+                <ShieldOff className="w-4 h-4 text-amber-600" />
                 免測路段維護
                 {exemptZones.length > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums font-bold bg-amber-100 text-amber-800 border border-amber-200/60">
                     {exemptZones.length}
                   </span>
                 )}
@@ -906,15 +915,15 @@ export default function App() {
               <button
                 id="tab-construction"
                 onClick={() => setActiveTab('construction')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                className={`btn-press flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
                   activeTab === 'construction'
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
-                <HardHat className="w-4 h-4" />
+                <HardHat className="w-4 h-4 text-orange-600" />
                 施工品質檢視
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-600">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200/60">
                   暫存
                 </span>
               </button>
@@ -928,148 +937,163 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* IRI 免測模式切換（常駐顯示） */}
-                  <div className="flex items-center gap-2 flex-wrap bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <ShieldOff className="w-3.5 h-3.5 text-amber-600" />
-                      IRI 免測統計模式：
-                    </span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {([
-                        { mode: 'all' as IriExemptMode, label: '全採納', id: 'btn-mode-all', color: 'bg-slate-700' },
-                        { mode: 'exclude' as IriExemptMode, label: '扣除免測', id: 'btn-mode-exclude', color: 'bg-amber-600' },
-                        { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', id: 'btn-mode-low-accept', color: 'bg-blue-600' },
-                      ]).map(({ mode, label, id, color }) => (
-                        <button
-                          key={mode}
-                          id={id}
-                          onClick={() => setIriExemptMode(mode)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            iriExemptMode === mode
-                              ? `${color} text-white shadow-sm ring-2 ring-offset-1 ring-slate-400`
-                              : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                  {/* IRI 免測模式切換 */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <ShieldOff className="w-4 h-4 text-amber-600" />
+                        IRI 免測統計模式
+                      </span>
+                      <div className="inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/60 gap-1">
+                        {([
+                          { mode: 'all' as IriExemptMode, label: '全採納', id: 'btn-mode-all', dot: 'bg-slate-500' },
+                          { mode: 'exclude' as IriExemptMode, label: '扣除免測', id: 'btn-mode-exclude', dot: 'bg-amber-500' },
+                          { mode: 'low-accept' as IriExemptMode, label: '免測但 ≤1.75 仍採納', id: 'btn-mode-low-accept', dot: 'bg-blue-500' },
+                        ]).map(({ mode, label, id, dot }) => (
+                          <button
+                            key={mode}
+                            id={id}
+                            onClick={() => setIriExemptMode(mode)}
+                            className={`btn-press flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              iriExemptMode === mode
+                                ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${dot} ${iriExemptMode === mode ? 'opacity-100' : 'opacity-40'}`}></span>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveTab('exempt-zones')}
-                      className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                      className="btn-press text-xs font-medium text-slate-700 hover:text-blue-600 bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-blue-200 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
                       title="前往專屬分頁維護免測路段資料庫"
                     >
-                      <span>前往維護免測路段 ({exemptZones.length})</span>
+                      <span>前往維護免測路段</span>
+                      <span className="font-mono tabular-nums text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-200/70 text-slate-700">
+                        {exemptZones.length}
+                      </span>
                       <span>→</span>
                     </button>
                   </div>
 
                   {stats && (
-                    <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
-                      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
-                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mr-2">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                        <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                           <Activity className="w-4 h-4 text-blue-600" />
                           統計比較週期設定
                         </h4>
                         
-                        {/* IRI 日期選單 */}
-                        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-blue-100 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold">IRI</span>
-                            <span className="text-xs font-bold text-slate-600">檢測日期</span>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          {/* IRI 日期選單 */}
+                          <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <span className="text-xs font-medium text-slate-600">IRI 檢測日期</span>
+                            <select
+                              value={selectedIriDate}
+                              onChange={(e) => setSelectedIriDate(e.target.value)}
+                              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer font-mono"
+                            >
+                              {availableIriDatesByRoute.length > 0 ? (
+                                availableIriDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
+                              ) : (
+                                <option value="">無檢測資料</option>
+                              )}
+                            </select>
                           </div>
-                          <select
-                            value={selectedIriDate}
-                            onChange={(e) => setSelectedIriDate(e.target.value)}
-                            className="border border-slate-200 bg-slate-50 rounded-lg py-1 px-3 text-xs font-bold text-blue-700 outline-none cursor-pointer hover:border-blue-400 transition-colors"
-                          >
-                            {availableIriDatesByRoute.length > 0 ? (
-                              availableIriDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
-                            ) : (
-                              <option value="">無檢測資料</option>
-                            )}
-                          </select>
-                        </div>
 
-                        {/* SN 日期選單 */}
-                        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-purple-100 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-600 text-[10px] font-bold">SN</span>
-                            <span className="text-xs font-bold text-slate-600">檢測日期</span>
+                          {/* SN 日期選單 */}
+                          <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                            <span className="text-xs font-medium text-slate-600">SN 檢測日期</span>
+                            <select
+                              value={selectedSnDate}
+                              onChange={(e) => setSelectedSnDate(e.target.value)}
+                              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer font-mono"
+                            >
+                              {availableSnDatesByRoute.length > 0 ? (
+                                availableSnDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
+                              ) : (
+                                <option value="">無檢測資料</option>
+                              )}
+                            </select>
                           </div>
-                          <select
-                            value={selectedSnDate}
-                            onChange={(e) => setSelectedSnDate(e.target.value)}
-                            className="border border-slate-200 bg-slate-50 rounded-lg py-1 px-3 text-xs font-bold text-purple-700 outline-none cursor-pointer hover:border-purple-400 transition-colors"
-                          >
-                            {availableSnDatesByRoute.length > 0 ? (
-                              availableSnDatesByRoute.map(y => <option key={y} value={y}>{y}</option>)
-                            ) : (
-                              <option value="">無檢測資料</option>
-                            )}
-                          </select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                         {/* 平均 IRI */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-blue-600">
-                            <Activity className="w-4 h-4" />
-                            <span className="text-xs font-medium">平均 IRI</span>
+                        <div className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex flex-col justify-between transition-colors">
+                          <div className="flex items-center gap-1.5 text-blue-600">
+                            <Activity className="w-3.5 h-3.5" />
+                            <span className="text-xs font-medium text-slate-700">平均 IRI</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.avgIri}</p>
-                          {stats.iriDate && <span className="text-[10px] text-slate-400 mt-1">{stats.iriDate} 檢測</span>}
+                          <p className="text-xl font-bold text-slate-900 font-mono tabular-nums tracking-tight my-1">{stats.avgIri}</p>
+                          {stats.iriDate && <span className="text-[10px] text-slate-400 font-mono tabular-nums">{stats.iriDate}</span>}
                         </div>
+
                         {/* IRI 四個級距卡片 */}
                         {stats.iriBands.map((band) => (
-                          <div key={band.label} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                            <div className={`flex items-center gap-2 ${band.color}`}>
-                              <AlertTriangle className="w-4 h-4" />
-                              <span className="text-xs font-medium whitespace-nowrap">{band.label}</span>
+                          <div key={band.label} className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex flex-col justify-between transition-colors">
+                            <div className={`flex items-center gap-1.5 ${band.color}`}>
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              <span className="text-xs font-medium whitespace-nowrap text-slate-700">{band.label}</span>
                             </div>
-                            <p className="text-xl font-bold text-slate-800">
-                              {band.count} 處
-                              <span className="text-sm font-medium text-slate-400 ml-1">/ {band.pct}%</span>
+                            <p className="text-xl font-bold text-slate-900 font-mono tabular-nums tracking-tight my-1">
+                              {band.count}
+                              <span className="text-xs font-normal text-slate-400 ml-1">處</span>
                             </p>
+                            <span className="text-[11px] text-slate-500 font-mono tabular-nums">佔比 {band.pct}%</span>
                           </div>
                         ))}
+
                         {/* 平均 SN */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-purple-600">
-                            <Activity className="w-4 h-4" />
-                            <span className="text-xs font-medium">平均 SN</span>
+                        <div className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex flex-col justify-between transition-colors">
+                          <div className="flex items-center gap-1.5 text-purple-600">
+                            <Activity className="w-3.5 h-3.5" />
+                            <span className="text-xs font-medium text-slate-700">平均 SN</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.avgSn}</p>
-                          {stats.snDate && <span className="text-[10px] text-slate-400 mt-1">{stats.snDate} 檢測</span>}
+                          <p className="text-xl font-bold text-slate-900 font-mono tabular-nums tracking-tight my-1">{stats.avgSn}</p>
+                          {stats.snDate && <span className="text-[10px] text-slate-400 font-mono tabular-nums">{stats.snDate}</span>}
                         </div>
+
                         {/* SN < 35 */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-red-600">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-xs font-medium">SN &lt; 35</span>
+                        <div className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex flex-col justify-between transition-colors">
+                          <div className="flex items-center gap-1.5 text-red-600">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span className="text-xs font-medium text-slate-700">SN &lt; 35</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.countSn35} 處</p>
+                          <p className="text-xl font-bold text-slate-900 font-mono tabular-nums tracking-tight my-1">
+                            {stats.countSn35}
+                            <span className="text-xs font-normal text-slate-400 ml-1">處</span>
+                          </p>
+                          <span className="text-[10px] text-slate-400">需改善路段</span>
                         </div>
+
                         {/* 分析車道公里數 */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center gap-1">
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="text-xs font-medium">分析車道公里</span>
+                        <div className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/70 rounded-xl p-3 flex flex-col justify-between transition-colors">
+                          <div className="flex items-center gap-1.5 text-emerald-600">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span className="text-xs font-medium text-slate-700">車道公里</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-800">{stats.laneLengthKm}</p>
-                          <span className="text-[11px] text-slate-400">車道公里</span>
+                          <p className="text-xl font-bold text-slate-900 font-mono tabular-nums tracking-tight my-1">{stats.laneLengthKm}</p>
+                          <span className="text-[10px] text-slate-400 font-mono">km</span>
                         </div>
+
                         {/* 免測扣除提示 */}
                         {stats.exemptedCount > 0 && (
-                          <div className="col-span-2 md:col-span-4 lg:col-span-8 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+                          <div className="col-span-2 md:col-span-4 lg:col-span-8 bg-amber-50/80 border border-amber-200/80 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <ShieldOff className="w-4 h-4 text-amber-600 shrink-0" />
-                              <span className="text-xs text-amber-800">
-                                目前依<strong>「{iriExemptMode === 'exclude' ? '扣除免測' : '免測但 ≤1.75 仍採納'}」</strong>模式排除 <strong>{stats.exemptedCount}</strong> 處伸縮縫/免測點（原始 {stats.totalBeforeExempt} 處），以有效 <strong>{stats.totalBeforeExempt - stats.exemptedCount}</strong> 處計算平均 IRI 及各階級。
+                              <span className="text-xs text-amber-900">
+                                目前依<strong>「{iriExemptMode === 'exclude' ? '扣除免測' : '免測但 ≤1.75 仍採納'}」</strong>模式排除 <strong className="font-mono tabular-nums">{stats.exemptedCount}</strong> 處伸縮縫/免測點（原始 <span className="font-mono tabular-nums">{stats.totalBeforeExempt}</span> 處），以有效 <strong className="font-mono tabular-nums">{stats.totalBeforeExempt - stats.exemptedCount}</strong> 處計算平均 IRI 及各階級。
                               </span>
                             </div>
-                            <span className="text-[11px] text-amber-600 font-semibold bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-medium text-amber-700 bg-amber-100/90 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
                               已校正
                             </span>
                           </div>
