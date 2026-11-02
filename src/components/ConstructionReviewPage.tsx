@@ -161,7 +161,7 @@ export const ConstructionReviewPage: React.FC<Props> = ({
   // ── 派生選項
   const routes = useMemo(() => {
     const list = Array.from(new Set(constData.map(d => normalizeRouteName(d.route)))).filter(r => r && r !== '未知路線').sort();
-    return list;
+    return ['全轄區', ...list];
   }, [constData]);
 
   const availableDirections = useMemo(() => {

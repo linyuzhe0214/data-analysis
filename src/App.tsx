@@ -238,7 +238,7 @@ export default function App() {
     const predefined = ['國道1號', '國道3號', '國道4號'];
     const others = dataRoutes.filter(r => !predefined.includes(r)).sort();
     const ordered = [...predefined.filter(r => dataRoutes.includes(r)), ...others];
-    return ordered;
+    return [ALL_DISTRICT_KEY, ...ordered];
   }, [data]);
 
   const availableDirections = useMemo(() => {
@@ -318,6 +318,14 @@ export default function App() {
       if (!selectedDate || !availableDates.includes(selectedDate)) setSelectedDate(availableDates[0]);
     }
   }, [data, routes, availableDates]);
+
+  // 切換至色塊圖時，若當前選中「全轄區」，自動切換至第一條具體路線
+  useEffect(() => {
+    if (activeTab === 'iri-map' && selectedRoute === ALL_DISTRICT_KEY) {
+      const firstRealRoute = routes.find(r => r !== ALL_DISTRICT_KEY) || '國道1號';
+      setSelectedRoute(firstRealRoute);
+    }
+  }, [activeTab, selectedRoute, routes]);
 
   useEffect(() => {
     if (availableIriDatesByRoute.length > 0) {
@@ -759,7 +767,9 @@ export default function App() {
                         onChange={(e) => setSelectedRoute(e.target.value)}
                         className="w-full border border-slate-200 bg-slate-50/60 hover:bg-white rounded-xl py-2.5 pl-3.5 pr-10 text-sm font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs cursor-pointer appearance-none"
                       >
-                        {routes.map(r => <option key={r} value={r}>{r}</option>)}
+                        {(activeTab === 'iri-map' ? routes.filter(r => r !== ALL_DISTRICT_KEY) : routes).map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
                       </select>
                       <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
