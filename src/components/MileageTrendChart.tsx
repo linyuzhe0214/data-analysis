@@ -23,12 +23,13 @@ interface MileageTrendChartProps {
   mergedLaneKey?: string;
   type: 'iri' | 'sn' | 'prqi';
   exemptZones?: ExemptZone[];
+  connectNulls?: boolean;
 }
 
 const COLORS = ['#94a3b8', '#38bdf8', '#818cf8', '#c084fc', '#f43f5e', '#fb923c', '#4ade80'];
 
 export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({ 
-  data, route, direction, lane, mergedLaneKey, type, exemptZones = [] 
+  data, route, direction, lane, mergedLaneKey, type, exemptZones = [], connectNulls
 }) => {
   const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
   const [showExemptMarkers, setShowExemptMarkers] = useState<boolean>(true);
@@ -108,8 +109,10 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
       return result;
     }).sort((a, b) => a.mileage - b.mileage);
 
-    // ── 斷點處理：若相鄰兩測點間距大於 0.3km (300m)，視為施工跳區或未檢測區間，插入 null 斷點不跨區連線
-    const BREAK_GAP_THRESHOLD = 0.3;
+    // ── 斷點處理：
+    // IRI/PRQI 採樣極密 (約 100m)，間距 > 0.5km 視為跳區或未檢測區間，插入 null 斷點不跨區連線
+    // SN 為單點抽測 (每 500m ~ 1km 測一點)，不應插入 0.3km 斷點 (僅大於 10km 巨大跨距才視為跳區)
+    const BREAK_GAP_THRESHOLD = type === 'sn' ? 10.0 : 0.5;
     const processedData: any[] = [];
     for (let i = 0; i < sortedRaw.length; i++) {
       const curr = sortedRaw[i];
@@ -423,17 +426,19 @@ export const MileageTrendChart: React.FC<MileageTrendChartProps> = ({
               const colorIndex = isMerged
                 ? chartData.mergedDates.indexOf(key.split('_')[0])
                 : index;
+              const strokeColor = COLORS[(colorIndex >= 0 ? colorIndex : index) % COLORS.length];
+              const shouldConnectNulls = type === 'sn' ? true : (connectNulls !== undefined ? connectNulls : true);
               return (
                 <Line
                   key={key}
                   type="monotone"
                   dataKey={key}
                   name={formatLegendKey(key)}
-                  stroke={COLORS[(colorIndex >= 0 ? colorIndex : index) % COLORS.length]}
+                  stroke={strokeColor}
                   strokeWidth={2}
-                  dot={false}
+                  dot={type === 'sn' ? { r: 3.5, strokeWidth: 1, fill: strokeColor } : false}
                   activeDot={{ r: 6 }}
-                  connectNulls={false}
+                  connectNulls={shouldConnectNulls}
                   hide={hiddenYears.has(key)}
                   strokeOpacity={hiddenYears.has(key) ? 0.2 : 1}
                 />
