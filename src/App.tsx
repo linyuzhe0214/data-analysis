@@ -644,7 +644,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2.5 tracking-tight">
-                高速公路鋪面檢測分析平台
+                國道鋪面檢測分析系統
                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                   v2.0
                 </span>
